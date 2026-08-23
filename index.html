@@ -1,0 +1,1677 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Café Real · Caja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --hierro:#15120e; --hierro-2:#1d1a15; --panel:#221c15; --panel-2:#2a2319;
+  --madera:#a5652f; --oro:#d3a24e; --oro-suave:#e8cd97; --concreto:#9a9184; --crema:#ece2ce;
+  --vino:#8a3535; --vino-suave:#c65b5b; --salvia:#6f8f63; --salvia-suave:#9dc08d;
+  --azul:#5b7ea3; --azul-suave:#8fb3d6; --morado:#7d6a9e; --morado-suave:#a996c9;
+  --linea:rgba(211,162,78,.18); --linea-fuerte:rgba(211,162,78,.34);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{background:var(--hierro); color:var(--crema); font-family:'Public Sans', sans-serif; -webkit-font-smoothing:antialiased; overscroll-behavior-y:contain;}
+h1,h2,h3,.display{font-family:'Fraunces', serif;}
+.mono{font-family:'IBM Plex Mono', monospace;}
+button{font-family:inherit; cursor:pointer; border:none; background:none; color:inherit;}
+input,select,textarea{font-family:inherit; color:var(--crema); background:var(--panel-2); border:1px solid var(--linea); border-radius:8px; padding:11px 12px; font-size:.92rem;}
+input:focus,select:focus,textarea:focus{outline:none; border-color:var(--oro);}
+::selection{background:var(--madera); color:var(--hierro);}
+.hidden{display:none !important;}
+
+/* ---------------- topbar ---------------- */
+.topbar{position:sticky; top:0; z-index:80; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 20px; background:rgba(21,18,14,.95); backdrop-filter:blur(8px); border-bottom:1px solid var(--linea);}
+.brand{display:flex; align-items:center; gap:10px; flex:0 0 auto;}
+.brand .mark{width:32px; height:32px; border-radius:50%; border:1px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:700; color:var(--oro); font-size:.85rem;}
+.brand strong{font-family:'Fraunces',serif; font-weight:600; font-size:1.02rem;}
+.brand small{display:block; font-size:.58rem; letter-spacing:.22em; text-transform:uppercase; color:var(--concreto); margin-top:1px;}
+.tabs{display:flex; gap:4px; background:var(--panel); border:1px solid var(--linea); border-radius:10px; padding:4px; overflow-x:auto; scrollbar-width:none; flex:1; min-width:0;}
+.tabs::-webkit-scrollbar{display:none;}
+.tabs button{position:relative; flex:0 0 auto; padding:9px 15px; font-size:.76rem; letter-spacing:.02em; border-radius:7px; color:var(--concreto); transition:background .2s, color .2s; white-space:nowrap;}
+.tabs button.active{background:var(--oro); color:var(--hierro); font-weight:600;}
+.nav-badge{position:absolute; top:2px; right:3px; background:var(--vino-suave); color:#fff; font-size:.55rem; min-width:14px; height:14px; border-radius:7px; display:flex; align-items:center; justify-content:center; padding:0 3px;}
+.reloj{font-size:.72rem; color:var(--concreto); text-align:right; letter-spacing:.03em; flex:0 0 auto;}
+.reloj strong{display:block; color:var(--oro-suave); font-size:.92rem; font-family:'IBM Plex Mono',monospace;}
+@media (max-width:860px){ .topbar{padding:10px 12px; flex-wrap:wrap;} .reloj{display:none;} }
+.icon-btn{width:34px; height:34px; border-radius:9px; border:1px solid var(--linea); display:flex; align-items:center; justify-content:center; font-size:1rem; color:var(--concreto); flex:0 0 auto;}
+.icon-btn:hover{border-color:var(--oro); color:var(--oro);}
+
+/* loader inicial */
+#loader{position:fixed; inset:0; z-index:400; background:var(--hierro); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; transition:opacity .25s;}
+#loader .spin{width:34px; height:34px; border-radius:50%; border:3px solid var(--linea-fuerte); border-top-color:var(--oro); animation:spin 0.8s linear infinite;}
+#loader span{font-size:.8rem; color:var(--concreto); letter-spacing:.04em;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* respaldo */
+.respaldo-opcion{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 0; border-bottom:1px solid var(--linea);}
+.respaldo-opcion:last-child{border-bottom:none;}
+.respaldo-opcion .txt{font-size:.84rem;}
+.respaldo-opcion .txt small{display:block; color:var(--concreto); font-size:.72rem; margin-top:2px;}
+
+/* buscador de productos en caja */
+.buscador-caja{display:flex; gap:8px; margin-bottom:12px;}
+.buscador-caja input{flex:1;}
+.cajero-linea{display:flex; align-items:center; gap:10px; font-size:.78rem; color:var(--concreto); margin-bottom:14px; flex-wrap:wrap;}
+.cajero-linea b{color:var(--oro-suave);}
+.cajero-linea button{color:var(--oro); text-decoration:underline; text-underline-offset:3px;}
+
+main{max-width:1360px; margin:0 auto; padding:22px 20px 90px;}
+.view{display:none;}
+.view.active{display:block; animation:fadeUp .3s ease;}
+@keyframes fadeUp{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);}}
+.eyebrow{font-size:.68rem; letter-spacing:.28em; text-transform:uppercase; color:var(--oro); margin-bottom:6px;}
+.titulo-vista{font-size:clamp(1.4rem,2.6vw,1.9rem); font-weight:600; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+.titulo-vista .acciones{display:flex; gap:8px;}
+
+/* ---------------- stat cards / cards ---------------- */
+.stat-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:14px; margin-bottom:28px;}
+.stat-card{background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:18px 20px; position:relative; overflow:hidden;}
+.stat-card .label{font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;}
+.stat-card .valor{font-family:'IBM Plex Mono',monospace; font-size:1.6rem; font-weight:600; color:var(--oro-suave);}
+.stat-card .sub{font-size:.76rem; color:var(--concreto); margin-top:4px;}
+.stat-card.ok::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--salvia);}
+.stat-card.warn::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--vino-suave);}
+.stat-card.info::before{content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--oro);}
+.resumen-cols{display:grid; grid-template-columns:1.3fr 1fr; gap:20px;}
+@media (max-width:900px){.resumen-cols{grid-template-columns:1fr;}}
+.card{background:var(--panel); border:1px solid var(--linea); border-radius:14px; padding:20px;}
+.card h3{font-size:1.02rem; font-weight:600; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;}
+.card h3 .ver-todo{font-size:.72rem; color:var(--oro); letter-spacing:.05em; text-transform:uppercase; font-weight:400;}
+.fila-simple{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--linea); font-size:.86rem; gap:10px;}
+.fila-simple:last-child{border-bottom:none;}
+.fila-simple .n{color:var(--crema);}
+.fila-simple .p{font-family:'IBM Plex Mono',monospace; color:var(--oro-suave); white-space:nowrap;}
+.vacio{color:var(--concreto); font-size:.85rem; padding:14px 0; text-align:center;}
+
+/* alerta de stock */
+.alerta-stock{background:rgba(198,91,91,.12); border:1px solid rgba(198,91,91,.35); border-radius:12px; padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+.alerta-stock .ico{width:34px; height:34px; border-radius:50%; background:var(--vino); display:flex; align-items:center; justify-content:center; font-weight:700; flex:0 0 auto;}
+.alerta-stock .txt{flex:1; min-width:200px; font-size:.85rem; color:var(--crema);}
+.alerta-stock .txt b{color:var(--vino-suave);}
+.alerta-stock button{font-size:.76rem; color:var(--oro); text-decoration:underline; text-underline-offset:3px;}
+
+/* ---------------- CAJA ---------------- */
+.caja-cerrada{max-width:420px; margin:8vh auto; text-align:center; background:var(--panel); border:1px solid var(--linea-fuerte); border-radius:16px; padding:40px 32px;}
+.caja-cerrada .icono{width:56px; height:56px; margin:0 auto 18px; border-radius:50%; border:1px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-size:1.5rem; color:var(--oro);}
+.caja-cerrada h2{font-size:1.4rem; margin-bottom:10px;}
+.caja-cerrada p{color:var(--concreto); font-size:.88rem; margin-bottom:22px; line-height:1.5;}
+.caja-cerrada label{display:block; text-align:left; font-size:.74rem; letter-spacing:.06em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;}
+.caja-cerrada input{width:100%; font-size:1.1rem; text-align:center; margin-bottom:18px;}
+
+.caja-layout{display:grid; grid-template-columns:1fr 370px; gap:20px; align-items:start;}
+@media (max-width:980px){.caja-layout{grid-template-columns:1fr;}}
+.cat-pills{display:flex; gap:8px; overflow-x:auto; padding-bottom:14px; margin-bottom:6px; scrollbar-width:thin;}
+.cat-pills button{flex:0 0 auto; padding:9px 16px; border:1px solid var(--linea); border-radius:20px; font-size:.8rem; color:var(--concreto); white-space:nowrap; transition:all .18s;}
+.cat-pills button.active{background:var(--oro); border-color:var(--oro); color:var(--hierro); font-weight:600;}
+
+.item-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:10px;}
+.item-tile{background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:10px; text-align:left; display:flex; flex-direction:column; gap:6px; transition:transform .12s, border-color .12s, background .12s; position:relative;}
+.item-tile:active{transform:scale(.96);}
+.item-tile:hover{border-color:var(--linea-fuerte); background:var(--panel-2);}
+.item-tile .img-ph{width:100%; aspect-ratio:4/3; border-radius:8px; border:1px dashed var(--linea-fuerte); background:var(--panel-2); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:2px;}
+.item-tile .img-ph .ic{font-family:'IBM Plex Mono',monospace; font-size:.72rem; font-weight:600; color:var(--oro); opacity:.8;}
+.item-tile .img-ph .lbl{font-size:.52rem; letter-spacing:.06em; text-transform:uppercase; color:var(--concreto);}
+.item-tile .nom{font-size:.82rem; line-height:1.25; font-weight:500;}
+.item-tile .pr{font-family:'IBM Plex Mono',monospace; font-size:.8rem; color:var(--oro-suave);}
+.item-tile .badge-qty{position:absolute; top:5px; right:5px; background:var(--oro); color:var(--hierro); font-weight:700; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-size:.74rem; z-index:2;}
+.item-tile.sin-stock{opacity:.45;}
+.item-tile .sin-stock-flag{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.68rem; letter-spacing:.04em; text-transform:uppercase; color:var(--vino-suave); background:rgba(21,18,14,.55); border-radius:12px;}
+
+/* receipt / order panel */
+.recibo{background:var(--panel); border:1px solid var(--linea-fuerte); border-radius:14px; padding:18px; position:sticky; top:82px; display:flex; flex-direction:column; max-height:calc(100vh - 100px);}
+.recibo-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px;}
+.recibo-head h3{font-size:1rem; font-weight:600;}
+.recibo-head span{font-size:.68rem; color:var(--concreto); font-family:'IBM Plex Mono',monospace;}
+.recibo-linea{border-top:1px dashed var(--linea-fuerte); margin:12px 0;}
+.recibo-lista{flex:1; overflow-y:auto; min-height:50px; max-height:26vh; padding-right:2px;}
+.recibo-item{display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--linea); font-size:.84rem;}
+.recibo-item:last-child{border-bottom:none;}
+.recibo-item .ri-nom{flex:1; line-height:1.3;}
+.recibo-item .ri-nom small{display:block; color:var(--concreto); font-family:'IBM Plex Mono',monospace; font-size:.7rem;}
+.qty-ctrl{display:flex; align-items:center; gap:6px;}
+.qty-ctrl button{width:22px; height:22px; border:1px solid var(--linea-fuerte); border-radius:6px; font-size:.85rem; line-height:1;}
+.qty-ctrl button:active{background:var(--oro); color:var(--hierro);}
+.qty-ctrl .n{font-family:'IBM Plex Mono',monospace; min-width:16px; text-align:center; font-size:.82rem;}
+.ri-precio{font-family:'IBM Plex Mono',monospace; font-size:.82rem; min-width:64px; text-align:right; color:var(--oro-suave);}
+.recibo-vacio{text-align:center; color:var(--concreto); font-size:.82rem; padding:22px 0;}
+.recibo-total-row{display:flex; justify-content:space-between; align-items:baseline; padding-top:10px;}
+.recibo-total-row .tl{font-size:.78rem; color:var(--concreto); letter-spacing:.06em; text-transform:uppercase;}
+.recibo-total-row .tv{font-family:'IBM Plex Mono',monospace; font-size:1.5rem; font-weight:600; color:var(--oro-suave);}
+.metodo-row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:14px;}
+.metodo-row button{padding:9px 4px; border:1px solid var(--linea); border-radius:9px; font-size:.7rem; text-align:center; color:var(--concreto);}
+.metodo-row button.active{background:var(--madera); border-color:var(--madera); color:var(--crema); font-weight:600;}
+.efectivo-box{margin-top:12px; display:grid; grid-template-columns:1fr; gap:8px;}
+.efectivo-box input{font-family:'IBM Plex Mono',monospace; text-align:right;}
+.cambio-line{display:flex; justify-content:space-between; font-size:.8rem; margin-top:8px; color:var(--concreto);}
+.cambio-line strong{color:var(--salvia-suave); font-family:'IBM Plex Mono',monospace;}
+.cambio-line.neg strong{color:var(--vino-suave);}
+.btn{padding:13px 18px; border-radius:9px; font-size:.86rem; font-weight:600; letter-spacing:.02em; transition:transform .15s, background .2s;}
+.btn:active{transform:scale(.97);}
+.btn-oro{background:var(--oro); color:var(--hierro);}
+.btn-oro:disabled{opacity:.35; cursor:not-allowed;}
+.btn-oro:not(:disabled):hover{background:var(--oro-suave);}
+.btn-outline{border:1px solid var(--linea-fuerte); color:var(--crema);}
+.btn-outline:hover{border-color:var(--oro);}
+.btn-vino{border:1px solid var(--vino-suave); color:var(--vino-suave);}
+.btn-vino:hover{background:var(--vino); color:var(--crema);}
+.btn-sm{padding:8px 12px; font-size:.74rem;}
+.btn-block{width:100%; margin-top:14px;}
+.recibo-notas{margin-top:12px;}
+.recibo-notas input{width:100%; font-size:.8rem;}
+.post-venta{margin-top:12px; padding:12px; border:1px solid var(--linea-fuerte); border-radius:10px; background:var(--panel-2); display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.post-venta span{font-size:.8rem; color:var(--salvia-suave);}
+
+/* historial / cierre */
+.seccion-caja-baja{margin-top:30px; display:grid; grid-template-columns:1.4fr 1fr; gap:20px; align-items:start;}
+@media (max-width:980px){.seccion-caja-baja{grid-template-columns:1fr;}}
+.hist-tabla{width:100%; border-collapse:collapse; font-size:.83rem;}
+.hist-tabla th{text-align:left; font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--concreto); padding:8px 6px; border-bottom:1px solid var(--linea-fuerte);}
+.hist-tabla td{padding:9px 6px; border-bottom:1px solid var(--linea); vertical-align:top;}
+.hist-tabla tr:last-child td{border-bottom:none;}
+.tag{display:inline-block; padding:3px 9px; border-radius:20px; font-size:.68rem; letter-spacing:.03em; white-space:nowrap;}
+.tag.efectivo{background:rgba(111,143,99,.18); color:var(--salvia-suave);}
+.tag.tarjeta{background:rgba(211,162,78,.16); color:var(--oro-suave);}
+.tag.transferencia{background:rgba(165,101,47,.22); color:#e0a870;}
+.tag.nequi{background:rgba(125,106,158,.22); color:var(--morado-suave);}
+.tag.daviplata{background:rgba(91,126,163,.22); color:var(--azul-suave);}
+.fila-acciones{display:flex; gap:10px; flex-wrap:wrap;}
+.link-btn{font-size:.72rem; letter-spacing:.03em; text-transform:uppercase; color:var(--oro);}
+.link-btn.danger{color:var(--vino-suave);}
+.cierre-box input{width:100%; margin:10px 0; font-family:'IBM Plex Mono',monospace; text-align:right; font-size:1rem;}
+.diferencia{font-size:.9rem; padding:10px 12px; border-radius:8px; margin-top:6px; text-align:center; font-family:'IBM Plex Mono',monospace;}
+.diferencia.cuadra{background:rgba(111,143,99,.16); color:var(--salvia-suave);}
+.diferencia.falta{background:rgba(138,53,53,.18); color:var(--vino-suave);}
+.diferencia.sobra{background:rgba(211,162,78,.16); color:var(--oro-suave);}
+
+/* ---------------- PRODUCTOS ---------------- */
+.prod-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px;}
+.prod-card{background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:14px; display:flex; flex-direction:column; gap:8px;}
+.prod-card .img-ph{width:100%; aspect-ratio:4/3; border-radius:9px; border:1px dashed var(--linea-fuerte); background:var(--panel-2); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px; color:var(--concreto);}
+.prod-card .img-ph .lbl{font-size:.62rem; letter-spacing:.06em; text-transform:uppercase;}
+.prod-card .nom{font-weight:600; font-size:.92rem;}
+.prod-card .pr{font-family:'IBM Plex Mono',monospace; color:var(--oro-suave); font-size:.9rem;}
+.prod-card .receta-tag{font-size:.68rem; color:var(--concreto);}
+.prod-card .receta-tag.ok{color:var(--salvia-suave);}
+.prod-card .fila-acciones{margin-top:auto; padding-top:8px; border-top:1px solid var(--linea);}
+.add-prod-card{border:1px dashed var(--linea-fuerte); display:flex; align-items:center; justify-content:center; min-height:200px; color:var(--oro); font-size:.86rem; flex-direction:column; gap:8px;}
+.add-prod-card .plus{font-size:1.8rem;}
+
+/* ---------------- INVENTARIO ---------------- */
+.inv-tabla-wrap{overflow-x:auto;}
+.inv-tabla{width:100%; border-collapse:collapse; font-size:.84rem;}
+.inv-tabla th{text-align:left; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--concreto); padding:8px 8px; border-bottom:1px solid var(--linea-fuerte);}
+.inv-tabla td{padding:9px 8px; border-bottom:1px solid var(--linea);}
+.inv-tabla tr.bajo td:first-child{border-left:3px solid var(--vino-suave); padding-left:8px;}
+.stock-badge{font-family:'IBM Plex Mono',monospace; font-weight:600;}
+.stock-badge.bajo{color:var(--vino-suave);}
+.stock-badge.agotado{color:#e57373; font-weight:700;}
+.stock-badge.ok{color:var(--salvia-suave);}
+.mini-input{width:90px; text-align:right; font-family:'IBM Plex Mono',monospace; padding:6px 8px; font-size:.8rem;}
+.add-insumo-form{display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; gap:8px; margin-bottom:18px; align-items:end;}
+@media (max-width:760px){.add-insumo-form{grid-template-columns:1fr 1fr;}}
+.add-insumo-form label{display:block; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:5px;}
+.add-insumo-form input,.add-insumo-form select{width:100%;}
+
+/* ---------------- RESERVAS ---------------- */
+.subnav{display:flex; gap:6px; margin-bottom:18px; background:var(--panel); border:1px solid var(--linea); border-radius:10px; padding:4px; width:fit-content;}
+.subnav button{padding:8px 16px; font-size:.78rem; border-radius:7px; color:var(--concreto);}
+.subnav button.active{background:var(--madera); color:var(--crema); font-weight:600;}
+.reservas-layout{display:grid; grid-template-columns:360px 1fr; gap:22px; align-items:start;}
+@media (max-width:980px){.reservas-layout{grid-template-columns:1fr;}}
+.form-reserva{background:var(--panel); border:1px solid var(--linea); border-radius:14px; padding:20px; position:sticky; top:82px;}
+.form-reserva h3{font-size:1.02rem; margin-bottom:16px;}
+.campo{margin-bottom:13px;}
+.campo label{display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;}
+.campo input,.campo select,.campo textarea{width:100%;}
+.campo-row{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+textarea{resize:vertical; min-height:56px;}
+.res-filtros{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+.res-filtros button{padding:8px 15px; border:1px solid var(--linea); border-radius:20px; font-size:.78rem; color:var(--concreto);}
+.res-filtros button.active{background:var(--oro); border-color:var(--oro); color:var(--hierro); font-weight:600;}
+.res-buscar{margin-left:auto; min-width:180px;}
+@media (max-width:600px){.res-buscar{margin-left:0; width:100%;}}
+.fecha-grupo{margin-bottom:22px;}
+.fecha-grupo .fecha-eyebrow{font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oro); display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+.fecha-grupo .fecha-eyebrow::after{content:''; flex:1; height:1px; background:var(--linea);}
+.fecha-eyebrow .hoy-chip{background:var(--oro); color:var(--hierro); padding:2px 8px; border-radius:10px; font-size:.62rem;}
+.res-card{background:var(--panel); border:1px solid var(--linea); border-radius:12px; padding:16px 18px; margin-bottom:10px; display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap;}
+.res-hora{font-family:'IBM Plex Mono',monospace; font-size:1.05rem; color:var(--oro-suave); min-width:58px;}
+.res-info{flex:1; min-width:180px;}
+.res-info .nom{font-weight:600; font-size:.95rem;}
+.res-info .meta{font-size:.78rem; color:var(--concreto); margin-top:3px; display:flex; gap:10px; flex-wrap:wrap;}
+.res-info .notas{font-size:.8rem; color:var(--concreto); margin-top:6px; font-style:italic;}
+.res-acciones{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.res-estado{padding:6px 12px; border-radius:20px; font-size:.72rem; border:1px solid var(--linea);}
+.res-estado.pendiente{color:var(--oro-suave); border-color:var(--linea-fuerte);}
+.res-estado.confirmada{color:var(--salvia-suave); border-color:rgba(111,143,99,.4);}
+.res-estado.atendida{color:var(--concreto); border-color:var(--linea);}
+.res-estado.cancelada{color:var(--vino-suave); border-color:rgba(198,91,91,.4); text-decoration:line-through;}
+.res-card.cancelada{opacity:.55;}
+.res-del{color:var(--vino-suave); font-size:.9rem;}
+.proximo-card{max-width:560px; margin:6vh auto; text-align:center; background:var(--panel); border:1px dashed var(--linea-fuerte); border-radius:16px; padding:44px 32px;}
+.proximo-card .ico{width:56px; height:56px; margin:0 auto 18px; border-radius:50%; border:1px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:var(--oro);}
+.proximo-card h3{font-size:1.2rem; margin-bottom:10px;}
+.proximo-card p{color:var(--concreto); font-size:.86rem; line-height:1.6;}
+.proximo-card ul{list-style:none; text-align:left; margin-top:18px; display:inline-block;}
+.proximo-card li{font-size:.83rem; color:var(--crema); padding:6px 0; display:flex; gap:8px;}
+.proximo-card li::before{content:'—'; color:var(--oro);}
+
+/* ---------------- ESTADISTICAS ---------------- */
+.rango-btns{display:flex; gap:8px; margin-bottom:20px;}
+.rango-btns button{padding:8px 16px; border:1px solid var(--linea); border-radius:20px; font-size:.78rem; color:var(--concreto);}
+.rango-btns button.active{background:var(--oro); border-color:var(--oro); color:var(--hierro); font-weight:600;}
+.bar-row{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+.bar-row .bar-label{width:150px; font-size:.82rem; flex:0 0 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.bar-row .bar-track{flex:1; height:20px; background:var(--panel-2); border-radius:5px; overflow:hidden;}
+.bar-row .bar-fill{height:100%; background:linear-gradient(90deg,var(--madera),var(--oro)); border-radius:5px; transition:width .4s ease;}
+.bar-row .bar-val{width:100px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:.8rem; color:var(--oro-suave); flex:0 0 auto;}
+
+/* modal / toast */
+#toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); z-index:200; background:var(--oro); color:var(--hierro); padding:14px 26px; border-radius:10px; font-weight:600; font-size:.88rem; opacity:0; pointer-events:none; transition:opacity .3s, transform .3s; box-shadow:0 12px 30px rgba(0,0,0,.4);}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+.overlay{position:fixed; inset:0; background:rgba(10,8,5,.6); backdrop-filter:blur(2px); z-index:300; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;}
+.modal-box{background:var(--panel); border:1px solid var(--linea-fuerte); border-radius:14px; padding:26px; max-width:360px; width:100%; text-align:center;}
+.modal-box p{font-size:.9rem; color:var(--crema); margin-bottom:20px; line-height:1.5;}
+.modal-actions{display:flex; gap:10px;}
+.modal-actions button{flex:1;}
+.modal-box.ancho{max-width:520px; text-align:left; max-height:88vh; overflow-y:auto;}
+.modal-box.ancho h3{font-size:1.1rem; margin-bottom:18px;}
+.receta-row{display:grid; grid-template-columns:1.5fr 90px 30px; gap:8px; margin-bottom:8px; align-items:center;}
+.receta-row select,.receta-row input{width:100%;}
+.receta-row button{color:var(--vino-suave); font-size:1rem;}
+.receta-unidad{font-size:.7rem; color:var(--concreto); grid-column:1/3; margin-top:-4px; margin-bottom:2px;}
+
+::-webkit-scrollbar{width:8px; height:8px;}
+::-webkit-scrollbar-thumb{background:var(--linea-fuerte); border-radius:10px;}
+
+/* ---------------- IMPRESION ---------------- */
+#recibo-imprimible{display:none;}
+@media print{
+  body *{visibility:hidden;}
+  #recibo-imprimible, #recibo-imprimible *{visibility:visible;}
+  #recibo-imprimible{display:block; position:absolute; left:0; top:0; width:78mm; padding:6px; font-family:'IBM Plex Mono',monospace; color:#000; background:#fff;}
+  #recibo-imprimible .ri-linea{border-top:1px dashed #000; margin:6px 0;}
+  #recibo-imprimible .ri-fila{display:flex; justify-content:space-between; font-size:11px; margin:2px 0;}
+  #recibo-imprimible h4{font-size:14px; text-align:center; margin-bottom:2px;}
+  #recibo-imprimible .centrado{text-align:center; font-size:10px;}
+}
+</style>
+</head>
+<body>
+
+<div id="loader"><div class="spin"></div><span>Cargando datos del café…</span></div>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">CR</div>
+    <div><strong>Café Real</strong><small>Caja &amp; Operación</small></div>
+  </div>
+  <div class="tabs" id="tabs">
+    <button data-v="resumen" class="active" onclick="cambiarVista('resumen')">Resumen</button>
+    <button data-v="caja" onclick="cambiarVista('caja')">Caja</button>
+    <button data-v="productos" onclick="cambiarVista('productos')">Productos</button>
+    <button data-v="inventario" onclick="cambiarVista('inventario')">Inventario<span class="nav-badge hidden" id="badge-inventario">0</span></button>
+    <button data-v="reservas" onclick="cambiarVista('reservas')">Reservas</button>
+    <button data-v="estadisticas" onclick="cambiarVista('estadisticas')">Estadísticas</button>
+  </div>
+  <button class="icon-btn" onclick="abrirModalRespaldo()" title="Exportar / respaldo">⤓</button>
+  <div class="reloj" id="reloj"><strong>--:--</strong><span id="reloj-fecha">--</span></div>
+</div>
+
+<main>
+
+  <!-- ================= RESUMEN ================= -->
+  <section class="view active" id="view-resumen">
+    <div class="eyebrow">Hoy</div>
+    <h2 class="titulo-vista" id="resumen-fecha">Resumen del día</h2>
+
+    <div id="resumen-alerta"></div>
+
+    <div class="stat-grid">
+      <div class="stat-card ok">
+        <div class="label">Ventas de hoy</div>
+        <div class="valor mono" id="stat-ventas-total">$0</div>
+        <div class="sub" id="stat-ventas-count">0 pedidos</div>
+      </div>
+      <div class="stat-card info">
+        <div class="label">Estado de caja</div>
+        <div class="valor mono" id="stat-caja-estado">Cerrada</div>
+        <div class="sub" id="stat-caja-sub">Sin abrir hoy</div>
+      </div>
+      <div class="stat-card warn">
+        <div class="label">Reservas de hoy</div>
+        <div class="valor mono" id="stat-reservas-hoy">0</div>
+        <div class="sub" id="stat-reservas-sub">Sin reservas</div>
+      </div>
+    </div>
+
+    <div class="resumen-cols">
+      <div class="card">
+        <h3>Últimas ventas <span class="ver-todo" onclick="cambiarVista('caja')">Ir a caja →</span></h3>
+        <div id="resumen-ultimas-ventas"></div>
+      </div>
+      <div class="card">
+        <h3>Próximas reservas <span class="ver-todo" onclick="cambiarVista('reservas')">Ir a reservas →</span></h3>
+        <div id="resumen-proximas-reservas"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CAJA ================= -->
+  <section class="view" id="view-caja">
+    <div id="caja-cerrada-box" class="caja-cerrada hidden">
+      <div class="icono">$</div>
+      <h2>La caja está cerrada</h2>
+      <p>Antes de vender, registra el efectivo con el que abres la caja hoy. Así al cerrar podrás cuadrar sin adivinar.</p>
+      <label for="input-cajero">¿Quién atiende hoy?</label>
+      <input type="text" id="input-cajero" placeholder="Tu nombre" style="margin-bottom:18px;">
+      <label for="input-apertura">Efectivo inicial (base)</label>
+      <input type="number" id="input-apertura" placeholder="Ej: 50000" inputmode="numeric">
+      <button class="btn btn-oro btn-block" onclick="abrirCaja()">Abrir caja</button>
+    </div>
+
+    <div id="caja-abierta-box" class="hidden">
+      <div class="eyebrow">Punto de venta</div>
+      <h2 class="titulo-vista">Tomar pedido</h2>
+      <div class="cajero-linea">Atiende: <b id="cajero-actual">—</b> <button onclick="cambiarCajero()">Cambiar</button></div>
+      <div id="caja-alerta-stock"></div>
+
+      <div class="caja-layout">
+        <div>
+          <div class="buscador-caja"><input type="text" id="buscador-productos" placeholder="Buscar producto por nombre…" oninput="buildItemGrid()"></div>
+          <div class="cat-pills" id="cat-pills"></div>
+          <div class="item-grid" id="item-grid"></div>
+        </div>
+
+        <div class="recibo">
+          <div class="recibo-head"><h3>Pedido actual</h3><span id="recibo-hora">--:--</span></div>
+          <div class="recibo-linea"></div>
+          <div class="recibo-lista" id="recibo-lista"><div class="recibo-vacio">Toca un producto para agregarlo</div></div>
+          <div class="recibo-linea"></div>
+          <div class="recibo-total-row" style="padding-top:0;"><span class="tl">Subtotal</span><span class="tv mono" id="recibo-subtotal" style="font-size:1.05rem;">$0</span></div>
+          <div id="descuento-linea" class="hidden" style="display:flex; justify-content:space-between; font-size:.82rem; color:var(--vino-suave); margin:6px 0;">
+            <span id="descuento-label">Descuento</span><span id="descuento-valor" class="mono">-$0</span>
+          </div>
+          <button type="button" class="link-btn" id="btn-toggle-descuento" onclick="toggleDescuentoForm()">+ Descuento / cortesía</button>
+          <div id="descuento-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <select id="desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
+            <input type="number" id="desc-valor" placeholder="Ej: 10">
+            <input type="text" id="desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
+            <button type="button" class="btn btn-oro btn-sm" onclick="aplicarDescuento()">Aplicar</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="quitarDescuento()">Quitar</button>
+          </div>
+          <div class="recibo-total-row"><span class="tl">Total</span><span class="tv mono" id="recibo-total">$0</span></div>
+
+          <div class="metodo-row" id="metodo-row">
+            <button data-m="efectivo" class="active" onclick="setMetodo('efectivo')">Efectivo</button>
+            <button data-m="tarjeta" onclick="setMetodo('tarjeta')">Tarjeta</button>
+            <button data-m="nequi" onclick="setMetodo('nequi')">Nequi</button>
+            <button data-m="daviplata" onclick="setMetodo('daviplata')">Daviplata</button>
+            <button data-m="transferencia" onclick="setMetodo('transferencia')">Transf.</button>
+          </div>
+
+          <div class="efectivo-box" id="efectivo-box">
+            <input type="number" id="input-recibido" placeholder="Recibido" inputmode="numeric" oninput="calcularCambio()">
+          </div>
+          <div class="cambio-line" id="cambio-line"></div>
+
+          <div class="recibo-notas"><input type="text" id="input-nota-venta" placeholder="Mesa / cliente (opcional)"></div>
+
+          <button class="btn btn-oro btn-block" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
+          <button class="btn btn-outline btn-block" onclick="vaciarPedido()">Vaciar pedido</button>
+
+          <div id="post-venta-box"></div>
+        </div>
+      </div>
+
+      <div class="seccion-caja-baja">
+        <div class="card">
+          <h3 id="hist-titulo">Ventas de hoy <span class="ver-todo" id="hist-count">0 ventas</span></h3>
+          <div style="margin-bottom:12px;"><input type="date" id="hist-fecha" onchange="renderHistorialVentas()" style="max-width:180px;"></div>
+          <div class="inv-tabla-wrap">
+            <table class="hist-tabla" id="tabla-ventas">
+              <thead><tr><th>Hora</th><th>Detalle</th><th>Método</th><th>Total</th><th></th></tr></thead>
+              <tbody id="tabla-ventas-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card cierre-box">
+          <h3>Cierre de caja</h3>
+          <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono" id="cierre-apertura">$0</span></div>
+          <div class="fila-simple"><span class="n">Ventas efectivo</span><span class="p mono" id="cierre-efectivo">$0</span></div>
+          <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono" id="cierre-esperado">$0</span></div>
+          <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-top:12px;">Efectivo contado</label>
+          <input type="number" id="input-contado" placeholder="Cuenta el cajón" inputmode="numeric" oninput="calcularDiferencia()">
+          <div id="diferencia-box"></div>
+          <button class="btn btn-vino btn-block" onclick="confirmarCierre()">Cerrar caja del día</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h3>Cierres anteriores <span class="ver-todo" id="cierres-count">0</span></h3>
+        <div class="inv-tabla-wrap">
+          <table class="hist-tabla">
+            <thead><tr><th>Fecha</th><th>Cajero</th><th>Base</th><th>Total ventas</th><th>Esperado</th><th>Contado</th><th>Diferencia</th><th></th></tr></thead>
+            <tbody id="tabla-cierres-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PRODUCTOS ================= -->
+  <section class="view" id="view-productos">
+    <div class="eyebrow">Catálogo</div>
+    <h2 class="titulo-vista">
+      Productos
+      <span class="acciones"><button class="btn btn-oro btn-sm" onclick="abrirModalProducto(null)">+ Nuevo producto</button></span>
+    </h2>
+    <div class="cat-pills" id="prod-cat-pills"></div>
+    <div class="prod-grid" id="prod-grid"></div>
+  </section>
+
+  <!-- ================= INVENTARIO ================= -->
+  <section class="view" id="view-inventario">
+    <div class="eyebrow">Insumos</div>
+    <h2 class="titulo-vista">Inventario</h2>
+    <div id="inventario-alerta"></div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <h3>Agregar insumo</h3>
+      <form class="add-insumo-form" onsubmit="return agregarInsumo(event)">
+        <div><label>Nombre</label><input type="text" id="inv-nombre" required placeholder="Ej: Huevos"></div>
+        <div><label>Unidad</label>
+          <select id="inv-unidad">
+            <option value="unidad">unidad</option><option value="g">g</option><option value="kg">kg</option>
+            <option value="ml">ml</option><option value="l">l</option>
+          </select>
+        </div>
+        <div><label>Stock inicial</label><input type="number" id="inv-stock" min="0" value="0"></div>
+        <div><label>Mínimo</label><input type="number" id="inv-minimo" min="0" value="0"></div>
+        <button type="submit" class="btn btn-oro">Agregar</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Insumos registrados <span class="ver-todo" id="inv-count">0</span></h3>
+      <div class="inv-tabla-wrap">
+        <table class="inv-tabla">
+          <thead><tr><th>Insumo</th><th>Unidad</th><th>Stock</th><th>Mínimo</th><th>Ajustar</th><th></th></tr></thead>
+          <tbody id="inv-tabla-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RESERVAS ================= -->
+  <section class="view" id="view-reservas">
+    <div class="eyebrow">Agenda</div>
+    <h2 class="titulo-vista">Reservas</h2>
+
+    <div class="subnav">
+      <button data-s="lista" class="active" onclick="setSubvistaReservas('lista')">Lista de reservas</button>
+      <button data-s="horario" onclick="setSubvistaReservas('horario')">Horario &amp; eventos</button>
+    </div>
+
+    <div id="reservas-lista-panel">
+      <div class="reservas-layout">
+        <form class="form-reserva" onsubmit="return guardarReserva(event)">
+          <h3 id="form-reserva-titulo">Nueva reserva</h3>
+          <div class="campo"><label>Nombre</label><input type="text" id="r-nombre" required placeholder="Nombre del cliente"></div>
+          <div class="campo"><label>Teléfono</label><input type="tel" id="r-telefono" placeholder="Ej: 3001234567"></div>
+          <div class="campo campo-row">
+            <div><label>Fecha</label><input type="date" id="r-fecha" required></div>
+            <div><label>Hora</label><input type="time" id="r-hora" required></div>
+          </div>
+          <div class="campo campo-row">
+            <div><label>Personas</label><input type="number" id="r-personas" min="1" value="2"></div>
+            <div><label>Motivo</label>
+              <select id="r-motivo">
+                <option value="General">General</option><option value="Cumpleaños">Cumpleaños</option>
+                <option value="Reunión de negocios">Reunión de negocios</option><option value="Cita">Cita</option>
+                <option value="Grupo grande">Grupo grande</option><option value="Otro">Otro</option>
+              </select>
+            </div>
+          </div>
+          <div class="campo"><label>Notas</label><textarea id="r-notas" placeholder="Detalles adicionales (opcional)"></textarea></div>
+          <input type="hidden" id="r-id">
+          <button type="submit" class="btn btn-oro btn-block" id="btn-guardar-reserva">Guardar reserva</button>
+          <button type="button" class="btn btn-outline btn-block hidden" id="btn-cancelar-edicion" onclick="cancelarEdicionReserva()">Cancelar edición</button>
+        </form>
+
+        <div>
+          <div class="res-filtros">
+            <button data-f="hoy" class="active" onclick="setFiltroReserva('hoy')">Hoy</button>
+            <button data-f="proximas" onclick="setFiltroReserva('proximas')">Próximas</button>
+            <button data-f="todas" onclick="setFiltroReserva('todas')">Todas</button>
+            <input type="text" class="res-buscar" id="res-buscar" placeholder="Buscar por nombre o teléfono" oninput="renderReservas()">
+          </div>
+          <div id="lista-reservas"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="reservas-horario-panel" class="hidden">
+      <div class="proximo-card">
+        <div class="ico">◔</div>
+        <h3>Horario de reservas &amp; eventos</h3>
+        <p>Este espacio está reservado para una vista de calendario semanal, donde podrás ver mesas y eventos por franja horaria de un vistazo, en vez de una lista por fecha.</p>
+        <ul>
+          <li>Vista semanal por horas, con las reservas ya cargadas</li>
+          <li>Bloqueo de horarios para eventos privados o cierres parciales</li>
+          <li>Aviso de choques de horario en la misma mesa o zona</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ESTADISTICAS ================= -->
+  <section class="view" id="view-estadisticas">
+    <div class="eyebrow">Desempeño</div>
+    <h2 class="titulo-vista">Estadísticas</h2>
+
+    <div class="rango-btns" id="rango-btns">
+      <button data-r="hoy" class="active" onclick="setRangoStats('hoy')">Hoy</button>
+      <button data-r="semana" onclick="setRangoStats('semana')">Últimos 7 días</button>
+      <button data-r="todo" onclick="setRangoStats('todo')">Todo el historial</button>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card ok"><div class="label">Total vendido</div><div class="valor mono" id="es-total">$0</div><div class="sub" id="es-count">0 ventas</div></div>
+      <div class="stat-card info"><div class="label">Ticket promedio</div><div class="valor mono" id="es-promedio">$0</div><div class="sub">por venta</div></div>
+      <div class="stat-card warn"><div class="label">Producto estrella</div><div class="valor mono" id="es-top" style="font-size:1.1rem;">—</div><div class="sub" id="es-top-sub"></div></div>
+    </div>
+
+    <div class="resumen-cols">
+      <div class="card">
+        <h3>Productos más vendidos</h3>
+        <div id="es-ranking"></div>
+      </div>
+      <div class="card">
+        <h3>Ventas por método de pago</h3>
+        <div id="es-metodos"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+<div id="modal-root"></div>
+
+<!-- plantilla de recibo imprimible -->
+<div id="recibo-imprimible"></div>
+
+<script>
+/* =========================================================
+   CATÁLOGO BASE (semilla inicial, editable luego desde Productos)
+   ========================================================= */
+const CATEGORIAS = { experiencia:"Experiencia", cafes:"Cafés", frias:"Bebidas frías", limonadas:"Limonadas", cervezas:"Cervezas", postres:"Postres", desayunos:"Desayunos" };
+const MENU_SEED = {
+  experiencia:[ ["Aborrajados","12.000"],["Cheesecake","12.000"],["Porción de papas francesas","9.000"],["Chips de plátano","7.000"],
+    ["Sándwich combo","15.000"],["Sándwich de jamón y queso","9.000"],["Torta de chocolate","8.000"],["Waffles de pandebono","7.000"],["Waffles con topping","15.000"] ],
+  cafes:[ ["Espresso","4.500"],["Americano","4.500"],["Café con leche","6.000"],["Cappuccino","9.500"],["Latte","7.000"],["Macchiato","7.500"],
+    ["Mocaccino","10.000"],["Latte vienés","10.500"],["Affogato","8.500"],["Frappé de café","11.000"],["Limonada de café","10.500"],
+    ["Aeropress","12.000"],["Chemex","12.000"],["V60","18.000"] ],
+  frias:[ ["Jugos en agua","9.000"],["Milo frío","12.000"],["Soda michelada","8.000"],["Soda de frutos rojos","14.000"],["Soda de frutos amarillos","14.000"],["Lulada","14.000"],
+    ["Agua Hatsu 500 ml","5.500"],["Agua Hatsu con gas 300 ml","4.500"],["Agua tónica Canada Dry cero","4.500"],["Manantial","5.500"],["Té Hatsu 400 ml","9.000"],
+    ["Bretaña","6.000"],["Ginger Ale Canada Dry","7.000"],["Soda Hatsu frambuesa","5.000"],["Soda Hatsu uva y romero","5.000"],["Energizante XS","16.000"],
+    ["Milo","10.000"],["Aromática","4.000"],["Malteada proteica","14.000"],["Soda fresa","14.000"],["Soda frutos amarillos","14.000"],["Soda frutos rojos","14.000"] ],
+  limonadas:[ ["Limonada de cereza","11.000"],["Limonada frutos rojos","11.000"],["Limonada mango","11.000"],["Limonada tamarindo","11.000"],["Limonada sandía","11.000"],
+    ["Limonada coco","13.000"],["Coco cereza","13.000"],["Coco frutos rojos","13.000"],["Coco maracuyá","13.000"],["Piña colada","13.000"],
+    ["Granizado de café","15.000"],["Limonada de vino tinto","15.000"] ],
+  cervezas:[ ["Cervezada de cereza","18.000"],["Cervezada de frutos rojos","18.000"],["Cervezada de mango biche","18.000"],["Cervezada de sandía","18.000"],["Cervezada de tamarindo","18.000"],["Cervezada de yerbabuena","18.000"],
+    ["Cordillera","12.000"],["Budweiser","10.000"],["Heineken","10.000"],["Miller lite","6.000"],["Sol","7.000"],["Club","10.000"],["Corona","10.000"],["Redds","9.000"],["Stella","12.000"],["Vaso michelado","2.000"] ],
+  postres:[ ["Cheesecake","12.000"],["Tortas","8.000"],["Carlotas","12.000"] ],
+  desayunos:[ ["Huevos pericos","10.000"],["Huevos rancheros","12.000"],["Huevos revueltos","6.000"],["Omelette criollo","13.000"],["Omelette maduratto","13.000"],["Chocolate con queso cuajada","6.000"] ]
+};
+const INSUMOS_SEED = [
+  {nombre:"Huevos", unidad:"unidad", stock:60, minimo:12},
+  {nombre:"Harina de trigo", unidad:"g", stock:5000, minimo:1000},
+  {nombre:"Leche", unidad:"ml", stock:8000, minimo:1500},
+  {nombre:"Café en grano", unidad:"g", stock:3000, minimo:500},
+  {nombre:"Azúcar", unidad:"g", stock:4000, minimo:500},
+  {nombre:"Queso", unidad:"g", stock:2000, minimo:300},
+  {nombre:"Jamón", unidad:"g", stock:1500, minimo:300},
+  {nombre:"Pan tajado", unidad:"unidad", stock:40, minimo:10},
+  {nombre:"Tomate", unidad:"unidad", stock:30, minimo:6},
+  {nombre:"Cebolla", unidad:"unidad", stock:25, minimo:5},
+  {nombre:"Chocolate en polvo", unidad:"g", stock:1500, minimo:200},
+  {nombre:"Hielo", unidad:"g", stock:10000, minimo:1000},
+];
+/* recetas de ejemplo — el resto del catálogo queda sin receta hasta que el dueño la complete en Productos */
+const RECETAS_SEED = {
+  "Huevos pericos": [["Huevos",2],["Tomate",1],["Cebolla",1]],
+  "Huevos revueltos": [["Huevos",2]],
+  "Huevos rancheros": [["Huevos",2],["Tomate",1]],
+  "Omelette criollo": [["Huevos",3],["Jamón",40],["Queso",30]],
+  "Omelette maduratto": [["Huevos",3],["Queso",30]],
+  "Sándwich de jamón y queso": [["Pan tajado",2],["Jamón",60],["Queso",40]],
+  "Waffles de pandebono": [["Harina de trigo",80],["Huevos",1],["Leche",100]],
+  "Cappuccino": [["Café en grano",18],["Leche",150]],
+  "Latte": [["Café en grano",18],["Leche",200]],
+  "Espresso": [["Café en grano",18]],
+  "Americano": [["Café en grano",18]],
+  "Chocolate con queso cuajada": [["Chocolate en polvo",25],["Leche",200]],
+  "Lulada": [["Hielo",150]],
+};
+
+function toNum(p){ return parseInt(String(p).replace(/\./g,''), 10) || 0; }
+function fmt(n){ return '$' + Math.round(n||0).toLocaleString('es-CO'); }
+function iconFor(name){
+  const stop = ['de','del','con','y','la','el','en','a','los','las'];
+  const words = name.trim().split(/\s+/).filter(w => w && !stop.includes(w.toLowerCase()));
+  if(words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.trim().slice(0,2).toUpperCase();
+}
+function uid(prefix){ return prefix + Date.now() + Math.floor(Math.random()*1000); }
+
+const METODOS = {
+  efectivo:{label:"Efectivo"}, tarjeta:{label:"Tarjeta"}, nequi:{label:"Nequi"}, daviplata:{label:"Daviplata"}, transferencia:{label:"Transferencia"}
+};
+
+/* =========================================================
+   ESTADO
+   ========================================================= */
+let CAJA = { estado:{ abierta:false, apertura:0, fechaApertura:null }, ventas:[], cierres:[] };
+let RESERVAS = { lista:[] };
+let PRODUCTOS = { lista:[] };
+let INVENTARIO = { lista:[] };
+
+let pedido = {}; // productoId -> {productoId, nombre, precio, cantidad}
+let descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
+let metodoActual = 'efectivo';
+let catActiva = null;
+let prodCatActiva = 'todas';
+let filtroReserva = 'hoy';
+let rangoStats = 'hoy';
+let recetaTemp = []; // usado mientras el modal de producto está abierto
+
+function hoyISO(){ const d = new Date(); return d.toISOString().slice(0,10); }
+function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}); }
+
+/* =========================================================
+   CARGA / GUARDADO (compartido entre todos los que usan la app)
+   ========================================================= */
+async function cargarDatos(){
+  try{
+    const r = await window.storage.get('caja', true);
+    if(r && r.value) CAJA = JSON.parse(r.value);
+  }catch(e){}
+  try{
+    const r = await window.storage.get('reservas', true);
+    if(r && r.value) RESERVAS = JSON.parse(r.value);
+  }catch(e){}
+  try{
+    const r = await window.storage.get('inventario', true);
+    if(r && r.value) INVENTARIO = JSON.parse(r.value);
+    else { INVENTARIO = { lista: INSUMOS_SEED.map(i=>({ id:uid('i'), ...i })) }; await guardarInventario(); }
+  }catch(e){
+    INVENTARIO = { lista: INSUMOS_SEED.map(i=>({ id:uid('i'), ...i })) }; await guardarInventario();
+  }
+  try{
+    const r = await window.storage.get('productos', true);
+    if(r && r.value) PRODUCTOS = JSON.parse(r.value);
+    else { PRODUCTOS = { lista: construirProductosSemilla() }; await guardarProductos(); }
+  }catch(e){
+    PRODUCTOS = { lista: construirProductosSemilla() }; await guardarProductos();
+  }
+  catActiva = Object.keys(CATEGORIAS)[0];
+  renderTodo();
+  const loader = document.getElementById('loader');
+  if(loader){ loader.style.opacity='0'; setTimeout(()=>loader.remove(), 250); }
+}
+function construirProductosSemilla(){
+  const lista = [];
+  Object.keys(MENU_SEED).forEach(cat=>{
+    MENU_SEED[cat].forEach(([nombre, precio])=>{
+      const recetaDef = RECETAS_SEED[nombre];
+      const receta = recetaDef ? recetaDef.map(([insNombre, cant])=>{
+        const ins = INVENTARIO.lista.find(i=>i.nombre===insNombre);
+        return ins ? { insumoId: ins.id, cantidad: cant } : null;
+      }).filter(Boolean) : [];
+      lista.push({ id: uid('p'), cat, nombre, precio: toNum(precio), receta, activo:true });
+    });
+  });
+  return lista;
+}
+async function guardarCaja(){ try{ await window.storage.set('caja', JSON.stringify(CAJA), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
+async function guardarReservas(){ try{ await window.storage.set('reservas', JSON.stringify(RESERVAS), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
+async function guardarInventario(){ try{ await window.storage.set('inventario', JSON.stringify(INVENTARIO), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
+async function guardarProductos(){ try{ await window.storage.set('productos', JSON.stringify(PRODUCTOS), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
+
+/* ---- lectura fresca antes de mutar: reduce (no elimina) choques cuando dos
+   dispositivos escriben casi al mismo tiempo. Cada mutación relee el dato
+   compartido más reciente, aplica el cambio ahí, y recién ahí guarda. ---- */
+async function conCajaFresca(mutador){
+  try{ const r = await window.storage.get('caja', true); if(r && r.value) CAJA = JSON.parse(r.value); }catch(e){}
+  mutador(CAJA);
+  await guardarCaja();
+}
+async function conInventarioFresco(mutador){
+  try{ const r = await window.storage.get('inventario', true); if(r && r.value) INVENTARIO = JSON.parse(r.value); }catch(e){}
+  mutador(INVENTARIO);
+  await guardarInventario();
+}
+async function conProductosFrescos(mutador){
+  try{ const r = await window.storage.get('productos', true); if(r && r.value) PRODUCTOS = JSON.parse(r.value); }catch(e){}
+  mutador(PRODUCTOS);
+  await guardarProductos();
+}
+async function conReservasFrescas(mutador){
+  try{ const r = await window.storage.get('reservas', true); if(r && r.value) RESERVAS = JSON.parse(r.value); }catch(e){}
+  mutador(RESERVAS);
+  await guardarReservas();
+}
+
+function mostrarToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+function confirmar(mensaje, onSi){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box"><p>${mensaje}</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-vino" id="modal-si">Sí, continuar</button>
+    </div></div></div>`;
+  document.getElementById('modal-si').onclick = ()=>{ root.innerHTML=''; onSi(); };
+}
+
+/* =========================================================
+   NAVEGACIÓN
+   ========================================================= */
+function cambiarVista(v){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  if(v==='resumen') renderResumen();
+  if(v==='caja') renderCaja();
+  if(v==='productos') renderProductos();
+  if(v==='inventario') renderInventario();
+  if(v==='reservas') renderReservas();
+  if(v==='estadisticas') renderEstadisticas();
+  window.scrollTo(0,0);
+}
+function renderTodo(){ renderResumen(); renderCaja(); renderProductos(); renderInventario(); renderReservas(); renderEstadisticas(); actualizarBadgeInventario(); }
+
+function tickReloj(){
+  const d = new Date();
+  document.getElementById('reloj').querySelector('strong').textContent = d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('reloj-fecha').textContent = d.toLocaleDateString('es-CO',{weekday:'short', day:'numeric', month:'short'});
+}
+setInterval(tickReloj, 1000*20);
+tickReloj();
+
+/* =========================================================
+   INVENTARIO — utilidades compartidas
+   ========================================================= */
+function insumosBajos(){ return INVENTARIO.lista.filter(i=>i.stock<=i.minimo); }
+function actualizarBadgeInventario(){
+  const bajos = insumosBajos();
+  const badge = document.getElementById('badge-inventario');
+  if(bajos.length){ badge.textContent = bajos.length; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+}
+function descontarInventarioPorVenta(itemsVenta){
+  itemsVenta.forEach(it=>{
+    const prod = PRODUCTOS.lista.find(p=>p.id===it.productoId);
+    if(!prod || !prod.receta || !prod.receta.length) return;
+    prod.receta.forEach(r=>{
+      const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId);
+      if(ins) ins.stock = Math.max(0, ins.stock - r.cantidad*it.cantidad);
+    });
+  });
+}
+function stockDisponibleParaProducto(prod){
+  if(!prod.receta || !prod.receta.length) return Infinity;
+  let min = Infinity;
+  prod.receta.forEach(r=>{
+    const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId);
+    if(!ins || r.cantidad<=0) return;
+    min = Math.min(min, Math.floor(ins.stock / r.cantidad));
+  });
+  return min;
+}
+
+/* =========================================================
+   RESUMEN
+   ========================================================= */
+function renderResumen(){
+  const hoy = hoyISO();
+  document.getElementById('resumen-fecha').textContent = new Date().toLocaleDateString('es-CO',{weekday:'long', day:'numeric', month:'long'});
+
+  const bajos = insumosBajos();
+  const alertaBox = document.getElementById('resumen-alerta');
+  alertaBox.innerHTML = bajos.length ? `<div class="alerta-stock"><div class="ico">!</div>
+    <div class="txt"><b>${bajos.length} insumo${bajos.length>1?'s':''}</b> con poco stock: ${bajos.slice(0,4).map(b=>b.nombre).join(', ')}${bajos.length>4?'…':''}</div>
+    <button onclick="cambiarVista('inventario')">Ver inventario →</button></div>` : '';
+
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy);
+  const totalHoy = ventasHoy.reduce((a,v)=>a+v.total,0);
+  document.getElementById('stat-ventas-total').textContent = fmt(totalHoy);
+  document.getElementById('stat-ventas-count').textContent = ventasHoy.length + (ventasHoy.length===1?' pedido':' pedidos');
+
+  document.getElementById('stat-caja-estado').textContent = CAJA.estado.abierta ? 'Abierta' : 'Cerrada';
+  document.getElementById('stat-caja-sub').textContent = CAJA.estado.abierta ? 'Base: ' + fmt(CAJA.estado.apertura) : 'Sin abrir hoy';
+
+  const resHoy = RESERVAS.lista.filter(r=>r.fecha===hoy && r.estado!=='cancelada');
+  document.getElementById('stat-reservas-hoy').textContent = resHoy.length;
+  document.getElementById('stat-reservas-sub').textContent = resHoy.length ? 'Agendadas para hoy' : 'Sin reservas';
+
+  const ultimasBox = document.getElementById('resumen-ultimas-ventas');
+  const ultimas = [...ventasHoy].sort((a,b)=>b.ts-a.ts).slice(0,5);
+  ultimasBox.innerHTML = ultimas.length ? ultimas.map(v=>`
+    <div class="fila-simple"><span class="n">${v.hora} · ${resumenItems(v.items)}</span><span class="p">${fmt(v.total)}</span></div>`).join('') : '<div class="vacio">Aún no hay ventas hoy</div>';
+
+  const proxBox = document.getElementById('resumen-proximas-reservas');
+  const proximas = RESERVAS.lista.filter(r=>r.estado!=='cancelada' && r.fecha>=hoy).sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora)).slice(0,5);
+  proxBox.innerHTML = proximas.length ? proximas.map(r=>`
+    <div class="fila-simple"><span class="n">${r.fecha===hoy?'Hoy':fechaCorta(r.fecha)} · ${r.hora} — ${r.nombre}</span><span class="p">${r.personas} pers.</span></div>`).join('') : '<div class="vacio">No hay próximas reservas</div>';
+
+  actualizarBadgeInventario();
+}
+function resumenItems(items){
+  const total = items.reduce((a,i)=>a+i.cantidad,0);
+  const primero = items[0] ? items[0].nombre : '';
+  return total>1 ? `${primero} +${total-1}` : primero;
+}
+function fechaCorta(iso){ const d = new Date(iso+'T00:00:00'); return d.toLocaleDateString('es-CO',{day:'numeric', month:'short'}); }
+
+/* =========================================================
+   CAJA — apertura / cierre
+   ========================================================= */
+function renderCaja(){
+  const cerradaBox = document.getElementById('caja-cerrada-box');
+  const abiertaBox = document.getElementById('caja-abierta-box');
+  if(!CAJA.estado.abierta){ cerradaBox.classList.remove('hidden'); abiertaBox.classList.add('hidden'); return; }
+  cerradaBox.classList.add('hidden'); abiertaBox.classList.remove('hidden');
+  document.getElementById('cajero-actual').textContent = CAJA.estado.cajero || 'Sin nombre';
+
+  const bajos = insumosBajos();
+  document.getElementById('caja-alerta-stock').innerHTML = bajos.length ? `<div class="alerta-stock"><div class="ico">!</div>
+    <div class="txt">Antes de vender más, repón: <b>${bajos.map(b=>b.nombre).join(', ')}</b></div>
+    <button onclick="cambiarVista('inventario')">Ir a inventario →</button></div>` : '';
+
+  buildCatPills(); buildItemGrid(); renderPedido();
+  if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
+  renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
+}
+async function abrirCaja(){
+  const val = toNum(document.getElementById('input-apertura').value || 0);
+  const cajero = document.getElementById('input-cajero').value.trim() || 'Sin nombre';
+  await conCajaFresca(c=>{ c.estado = { abierta:true, apertura:val, fechaApertura: hoyISO(), cajero }; });
+  mostrarToast('Caja abierta con base de ' + fmt(val));
+  renderCaja(); renderResumen();
+}
+function cambiarCajero(){
+  const nuevo = prompt('¿Quién atiende ahora?', CAJA.estado.cajero || '');
+  if(nuevo === null || !nuevo.trim()) return;
+  conCajaFresca(c=>{ c.estado.cajero = nuevo.trim(); }).then(()=>renderCaja());
+}
+function confirmarCierre(){
+  const contado = document.getElementById('input-contado').value;
+  if(contado === ''){ mostrarToast('Ingresa el efectivo contado antes de cerrar'); return; }
+  const hoy = hoyISO();
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  const esperado = CAJA.estado.apertura + efectivo;
+  const diff = toNum(contado) - esperado;
+  const msg = diff===0
+    ? '¿Cerrar la caja del día? El efectivo contado cuadra exacto con lo esperado.'
+    : diff>0
+      ? `¿Cerrar la caja del día? Hay ${fmt(diff)} de sobra respecto a lo esperado. Las ventas de hoy quedarán archivadas y no se podrán anular después.`
+      : `¿Cerrar la caja del día? Faltan ${fmt(Math.abs(diff))} respecto a lo esperado. Las ventas de hoy quedarán archivadas y no se podrán anular después.`;
+  confirmar(msg, cerrarCaja);
+}
+async function cerrarCaja(){
+  const hoy = hoyISO();
+  const contado = toNum(document.getElementById('input-contado').value);
+  await conCajaFresca(c=>{
+    const ventasHoy = c.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+    const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
+    ventasHoy.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
+    const esperado = c.estado.apertura + (porMetodo.efectivo||0);
+    c.cierres.push({ id:uid('c'), fecha:hoy, apertura:c.estado.apertura, cajero:c.estado.cajero, porMetodo,
+      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), esperado, contado, diferencia: contado-esperado });
+    c.ventas.forEach(v=>{ if(v.fecha===hoy) v.cerrada = true; });
+    c.estado = { abierta:false, apertura:0, fechaApertura:null, cajero:null };
+  });
+  document.getElementById('input-contado').value = '';
+  mostrarToast('Caja cerrada. ¡Buen trabajo hoy!');
+  renderCaja(); renderResumen();
+}
+function renderCierrePreview(){
+  const hoy = hoyISO();
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  const esperado = CAJA.estado.apertura + efectivo;
+  document.getElementById('cierre-apertura').textContent = fmt(CAJA.estado.apertura);
+  document.getElementById('cierre-efectivo').textContent = fmt(efectivo);
+  document.getElementById('cierre-esperado').textContent = fmt(esperado);
+  calcularDiferencia();
+}
+function calcularDiferencia(){
+  const box = document.getElementById('diferencia-box');
+  const contadoStr = document.getElementById('input-contado').value;
+  if(contadoStr===''){ box.innerHTML=''; return; }
+  const hoy = hoyISO();
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  const esperado = CAJA.estado.apertura + efectivo;
+  const contado = toNum(contadoStr);
+  const diff = contado - esperado;
+  let clase = 'cuadra', texto = 'Cuadra exacto';
+  if(diff < 0){ clase='falta'; texto = 'Faltan ' + fmt(Math.abs(diff)); }
+  else if(diff > 0){ clase='sobra'; texto = 'Sobran ' + fmt(diff); }
+  box.innerHTML = `<div class="diferencia ${clase}">${texto}</div>`;
+}
+
+/* =========================================================
+   CAJA — punto de venta
+   ========================================================= */
+function buildCatPills(){
+  const el = document.getElementById('cat-pills');
+  el.innerHTML = Object.keys(CATEGORIAS).map(k=>`<button data-k="${k}" class="${k===catActiva?'active':''}" onclick="setCat('${k}')">${CATEGORIAS[k]}</button>`).join('');
+}
+function setCat(k){ catActiva = k; buildCatPills(); buildItemGrid(); }
+function buildItemGrid(){
+  const el = document.getElementById('item-grid');
+  const buscar = (document.getElementById('buscador-productos').value || '').trim().toLowerCase();
+  const pillsEl = document.getElementById('cat-pills');
+  let items;
+  if(buscar){
+    pillsEl.style.opacity = '.4'; pillsEl.style.pointerEvents = 'none';
+    items = PRODUCTOS.lista.filter(p=>p.activo!==false && p.nombre.toLowerCase().includes(buscar));
+  }else{
+    pillsEl.style.opacity = '1'; pillsEl.style.pointerEvents = 'auto';
+    items = PRODUCTOS.lista.filter(p=>p.cat===catActiva && p.activo!==false);
+  }
+  if(!items.length){ el.innerHTML = '<div class="vacio">No se encontró ningún producto</div>'; return; }
+  el.innerHTML = items.map(it=>{
+    const qty = pedido[it.id] ? pedido[it.id].cantidad : 0;
+    const disponible = stockDisponibleParaProducto(it);
+    const sinStock = disponible <= 0;
+    return `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="agregarItem('${it.id}')" ${sinStock?'disabled':''}>
+      ${qty>0 ? `<div class="badge-qty">${qty}</div>` : ''}
+      ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
+      <div class="img-ph"><span class="ic">${iconFor(it.nombre)}</span><span class="lbl">Sin foto</span></div>
+      <div class="nom">${it.nombre}</div>
+      <div class="pr mono">${fmt(it.precio)}</div>
+    </button>`;
+  }).join('');
+}
+function agregarItem(id){
+  const it = PRODUCTOS.lista.find(p=>p.id===id);
+  if(!it) return;
+  if(stockDisponibleParaProducto(it) <= (pedido[id]?pedido[id].cantidad:0)){ mostrarToast('No hay suficiente inventario para agregar otro'); return; }
+  if(!pedido[id]) pedido[id] = { productoId:id, nombre: it.nombre, precio: it.precio, cantidad:0 };
+  pedido[id].cantidad++;
+  buildItemGrid(); renderPedido();
+}
+function cambiarCantidad(id, delta){
+  if(!pedido[id]) return;
+  pedido[id].cantidad += delta;
+  if(pedido[id].cantidad <= 0) delete pedido[id];
+  buildItemGrid(); renderPedido();
+}
+function vaciarPedido(){
+  pedido = {};
+  descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
+  document.getElementById('input-recibido').value = '';
+  document.getElementById('input-nota-venta').value = '';
+  document.getElementById('desc-valor').value = '';
+  document.getElementById('desc-motivo').value = '';
+  document.getElementById('descuento-form').classList.add('hidden');
+  buildItemGrid(); renderPedido();
+}
+function totalPedido(){ return Object.values(pedido).reduce((a,i)=>a + i.precio*i.cantidad, 0); }
+function calcularMontoDescuento(subtotal){
+  if(descuentoActual.tipo==='cortesia') return subtotal;
+  if(descuentoActual.tipo==='porcentaje') return Math.min(subtotal, subtotal*descuentoActual.valor/100);
+  if(descuentoActual.tipo==='valor') return Math.min(subtotal, descuentoActual.valor);
+  return 0;
+}
+function totalConDescuento(){
+  const subtotal = totalPedido();
+  return Math.max(0, subtotal - calcularMontoDescuento(subtotal));
+}
+function toggleDescuentoForm(){ document.getElementById('descuento-form').classList.toggle('hidden'); }
+function aplicarDescuento(){
+  const tipo = document.getElementById('desc-tipo').value;
+  const valor = parseFloat(document.getElementById('desc-valor').value)||0;
+  const motivo = document.getElementById('desc-motivo').value.trim();
+  if(tipo!=='cortesia' && valor<=0){ mostrarToast('Ingresa un valor de descuento válido'); return; }
+  if(!motivo){ mostrarToast('Escribe un motivo (ej: cliente frecuente, error de cocina)'); return; }
+  descuentoActual = { tipo, valor: tipo==='cortesia' ? 100 : valor, motivo };
+  document.getElementById('descuento-form').classList.add('hidden');
+  mostrarToast('Descuento aplicado');
+  renderPedido();
+}
+function quitarDescuento(){
+  descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
+  document.getElementById('desc-valor').value = '';
+  document.getElementById('desc-motivo').value = '';
+  renderPedido();
+}
+function renderPedido(){
+  document.getElementById('recibo-hora').textContent = ahoraStr();
+  const lista = document.getElementById('recibo-lista');
+  const keys = Object.keys(pedido);
+  lista.innerHTML = keys.length ? keys.map(k=>{
+    const i = pedido[k];
+    return `<div class="recibo-item">
+      <div class="ri-nom">${i.nombre}<small>${fmt(i.precio)} c/u</small></div>
+      <div class="qty-ctrl"><button onclick="cambiarCantidad('${k}',-1)">–</button><span class="n">${i.cantidad}</span><button onclick="cambiarCantidad('${k}',1)">+</button></div>
+      <div class="ri-precio">${fmt(i.precio*i.cantidad)}</div>
+    </div>`;
+  }).join('') : '<div class="recibo-vacio">Toca un producto para agregarlo</div>';
+
+  const subtotal = totalPedido();
+  const montoDesc = calcularMontoDescuento(subtotal);
+  const total = Math.max(0, subtotal - montoDesc);
+  document.getElementById('recibo-subtotal').textContent = fmt(subtotal);
+  const descLinea = document.getElementById('descuento-linea');
+  if(montoDesc > 0){
+    descLinea.classList.remove('hidden');
+    const etiqueta = descuentoActual.tipo==='cortesia' ? 'Cortesía' : descuentoActual.tipo==='porcentaje' ? `Descuento ${descuentoActual.valor}%` : 'Descuento';
+    document.getElementById('descuento-label').textContent = `${etiqueta} · ${descuentoActual.motivo}`;
+    document.getElementById('descuento-valor').textContent = '-' + fmt(montoDesc);
+  }else{ descLinea.classList.add('hidden'); }
+  document.getElementById('btn-toggle-descuento').textContent = montoDesc>0 ? 'Editar descuento / cortesía' : '+ Descuento / cortesía';
+
+  document.getElementById('recibo-total').textContent = fmt(total);
+  calcularCambio();
+  document.getElementById('btn-cobrar').disabled = keys.length===0 || !metodoValido(total);
+}
+function setMetodo(m){
+  metodoActual = m;
+  document.querySelectorAll('#metodo-row button').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
+  document.getElementById('efectivo-box').classList.toggle('hidden', m!=='efectivo');
+  document.getElementById('cambio-line').classList.toggle('hidden', m!=='efectivo');
+  renderPedido();
+}
+function calcularCambio(){
+  const line = document.getElementById('cambio-line');
+  if(metodoActual !== 'efectivo'){ line.innerHTML=''; return; }
+  const total = totalConDescuento();
+  const recibidoVal = document.getElementById('input-recibido').value;
+  if(!recibidoVal){ line.innerHTML=''; document.getElementById('btn-cobrar').disabled = Object.keys(pedido).length===0; return; }
+  const recibido = toNum(recibidoVal);
+  const cambio = recibido - total;
+  line.className = 'cambio-line' + (cambio<0 ? ' neg' : '');
+  line.innerHTML = `<span>Cambio a devolver</span><strong>${fmt(Math.abs(cambio))}</strong>`;
+  document.getElementById('btn-cobrar').disabled = Object.keys(pedido).length===0 || cambio < 0;
+}
+function metodoValido(total){
+  if(metodoActual !== 'efectivo') return true;
+  const recibidoStr = document.getElementById('input-recibido').value;
+  if(recibidoStr === '') return true;
+  return toNum(recibidoStr) >= total;
+}
+async function cobrar(){
+  const keys = Object.keys(pedido);
+  if(!keys.length) return;
+  const subtotal = totalPedido();
+  const montoDesc = calcularMontoDescuento(subtotal);
+  const total = Math.max(0, subtotal - montoDesc);
+  const recibidoStr = document.getElementById('input-recibido').value;
+  const recibido = metodoActual==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : total) : null;
+  const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
+  const venta = {
+    id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
+    descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
+    metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
+    nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
+    cajero: CAJA.estado.cajero || null
+  };
+  await conCajaFresca(c=>{ c.ventas.push(venta); });
+  await conInventarioFresco(inv=>{ descontarInventarioPorVenta(items); });
+  mostrarToast('Venta registrada · ' + fmt(total));
+
+  const box = document.getElementById('post-venta-box');
+  box.innerHTML = `<div class="post-venta"><span>Venta guardada ✓</span><button class="btn btn-outline btn-sm" onclick='imprimirVenta(${JSON.stringify(venta).replace(/'/g,"&#39;")})'>Imprimir recibo</button></div>`;
+
+  vaciarPedido();
+  renderCaja(); renderResumen(); renderEstadisticas();
+}
+
+/* historial de ventas por fecha */
+function renderHistorialVentas(){
+  const fechaInput = document.getElementById('hist-fecha');
+  if(!fechaInput.value) fechaInput.value = hoyISO();
+  const fecha = fechaInput.value;
+  const esHoy = fecha === hoyISO();
+  document.getElementById('hist-titulo').innerHTML = (esHoy ? 'Ventas de hoy' : 'Ventas del ' + fechaCorta(fecha)) + ' <span class="ver-todo" id="hist-count"></span>';
+  const ventasDia = [...CAJA.ventas.filter(v=>v.fecha===fecha)].sort((a,b)=>b.ts-a.ts);
+  document.getElementById('hist-count').textContent = ventasDia.length + (ventasDia.length===1?' venta':' ventas');
+  const body = document.getElementById('tabla-ventas-body');
+  body.innerHTML = ventasDia.length ? ventasDia.map(v=>`
+    <tr>
+      <td class="mono">${v.hora}</td>
+      <td>${v.items.map(i=>`${i.cantidad}× ${i.nombre}`).join(', ')}
+        ${v.descuento ? `<br><span style="color:var(--vino-suave); font-size:.74rem;">${v.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${v.descuento.motivo}): -${fmt(v.descuento.monto)}</span>` : ''}
+        ${v.nota?`<br><span style="color:var(--concreto); font-size:.74rem;">${v.nota}</span>`:''}
+        ${v.cajero?`<br><span style="color:var(--concreto); font-size:.7rem;">Atendió: ${v.cajero}</span>`:''}
+      </td>
+      <td><span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span></td>
+      <td class="mono">${fmt(v.total)}</td>
+      <td><div class="fila-acciones">
+        <button class="link-btn" onclick='imprimirVenta(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Imprimir</button>
+        ${v.cerrada ? '' : `<button class="link-btn danger" onclick="anularVenta('${v.id}')">Anular</button>`}
+      </div></td>
+    </tr>`).join('') : `<tr><td colspan="5" class="vacio">No hay ventas registradas ese día</td></tr>`;
+}
+function anularVenta(id){
+  confirmar('¿Anular esta venta? Se eliminará del historial de hoy.', async ()=>{
+    await conCajaFresca(c=>{ c.ventas = c.ventas.filter(v=>v.id!==id); });
+    mostrarToast('Venta anulada');
+    renderCaja(); renderResumen();
+  });
+}
+
+/* =========================================================
+   IMPRESIÓN DE RECIBO (impresora térmica del mostrador)
+   ========================================================= */
+function imprimirVenta(venta){
+  const el = document.getElementById('recibo-imprimible');
+  el.innerHTML = `
+    <h4>CAFÉ REAL</h4>
+    <div class="centrado">Centro de Negocios</div>
+    <div class="centrado">${new Date(venta.ts).toLocaleString('es-CO')}</div>
+    <div class="ri-linea"></div>
+    ${venta.items.map(i=>`<div class="ri-fila"><span>${i.cantidad}× ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
+    ${venta.descuento ? `<div class="ri-fila"><span>${venta.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${venta.descuento.motivo})</span><span>-${fmt(venta.descuento.monto)}</span></div>` : ''}
+    <div class="ri-linea"></div>
+    <div class="ri-fila" style="font-weight:bold;"><span>TOTAL</span><span>${fmt(venta.total)}</span></div>
+    <div class="ri-fila"><span>Método</span><span>${METODOS[venta.metodo]?.label||venta.metodo}</span></div>
+    ${venta.recibido!=null ? `<div class="ri-fila"><span>Recibido</span><span>${fmt(venta.recibido)}</span></div><div class="ri-fila"><span>Cambio</span><span>${fmt(venta.cambio)}</span></div>` : ''}
+    ${venta.cajero ? `<div class="ri-fila"><span>Atendió</span><span>${venta.cajero}</span></div>` : ''}
+    ${venta.nota ? `<div class="ri-linea"></div><div class="centrado">${venta.nota}</div>` : ''}
+    <div class="ri-linea"></div>
+    <div class="centrado">¡Gracias por su visita!</div>
+  `;
+  setTimeout(()=>window.print(), 80);
+}
+function renderCierresAnteriores(){
+  const cierres = [...CAJA.cierres].sort((a,b)=>b.id.localeCompare(a.id));
+  document.getElementById('cierres-count').textContent = cierres.length;
+  const body = document.getElementById('tabla-cierres-body');
+  body.innerHTML = cierres.length ? cierres.map(c=>`
+    <tr>
+      <td class="mono">${fechaCorta(c.fecha)}</td>
+      <td>${c.cajero||'—'}</td>
+      <td class="mono">${fmt(c.apertura)}</td>
+      <td class="mono">${fmt(c.totalVentas)}</td>
+      <td class="mono">${fmt(c.esperado)}</td>
+      <td class="mono">${fmt(c.contado)}</td>
+      <td class="mono" style="color:${c.diferencia<0?'var(--vino-suave)':c.diferencia>0?'var(--oro-suave)':'var(--salvia-suave)'}">${c.diferencia===0?'Cuadrado':fmt(c.diferencia)}</td>
+      <td><button class="link-btn" onclick='imprimirCierre(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Imprimir</button></td>
+    </tr>`).join('') : `<tr><td colspan="8" class="vacio">Aún no se ha cerrado ninguna caja</td></tr>`;
+}
+function imprimirCierre(c){
+  const el = document.getElementById('recibo-imprimible');
+  el.innerHTML = `
+    <h4>CAFÉ REAL</h4>
+    <div class="centrado">Cierre de caja</div>
+    <div class="centrado">${fechaCorta(c.fecha)} · ${c.cajero||'—'}</div>
+    <div class="ri-linea"></div>
+    <div class="ri-fila"><span>Base inicial</span><span>${fmt(c.apertura)}</span></div>
+    ${Object.keys(c.porMetodo||{}).map(m=>`<div class="ri-fila"><span>${METODOS[m]?.label||m}</span><span>${fmt(c.porMetodo[m])}</span></div>`).join('')}
+    <div class="ri-linea"></div>
+    <div class="ri-fila" style="font-weight:bold;"><span>Total ventas</span><span>${fmt(c.totalVentas)}</span></div>
+    <div class="ri-fila"><span>Efectivo esperado</span><span>${fmt(c.esperado)}</span></div>
+    <div class="ri-fila"><span>Efectivo contado</span><span>${fmt(c.contado)}</span></div>
+    <div class="ri-fila" style="font-weight:bold;"><span>Diferencia</span><span>${fmt(c.diferencia)}</span></div>
+    <div class="ri-linea"></div>
+    <div class="centrado">Reporte generado por Café Real · Caja</div>
+  `;
+  setTimeout(()=>window.print(), 80);
+}
+
+/* =========================================================
+   PRODUCTOS (catálogo + recetas)
+   ========================================================= */
+function renderProductos(){
+  const pillsEl = document.getElementById('prod-cat-pills');
+  pillsEl.innerHTML = ['<button data-k="todas" class="'+(prodCatActiva==='todas'?'active':'')+'" onclick="setProdCat(\'todas\')">Todas</button>']
+    .concat(Object.keys(CATEGORIAS).map(k=>`<button data-k="${k}" class="${k===prodCatActiva?'active':''}" onclick="setProdCat('${k}')">${CATEGORIAS[k]}</button>`)).join('');
+
+  const grid = document.getElementById('prod-grid');
+  const items = PRODUCTOS.lista.filter(p=>prodCatActiva==='todas' || p.cat===prodCatActiva);
+  grid.innerHTML = items.map(p=>{
+    const tieneReceta = p.receta && p.receta.length;
+    return `<div class="prod-card">
+      <div class="img-ph"><span style="font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--oro);">${iconFor(p.nombre)}</span><span class="lbl">Espacio para foto</span></div>
+      <div class="nom">${p.nombre}</div>
+      <div class="pr">${fmt(p.precio)}</div>
+      <div class="receta-tag ${tieneReceta?'ok':''}">${tieneReceta ? '✓ '+p.receta.length+' insumo'+(p.receta.length>1?'s':'')+' en receta' : 'Sin receta de inventario'}</div>
+      <div class="fila-acciones">
+        <button class="link-btn" onclick="abrirModalProducto('${p.id}')">Editar</button>
+        <button class="link-btn danger" onclick="eliminarProducto('${p.id}')">Eliminar</button>
+      </div>
+    </div>`;
+  }).join('') + `<div class="prod-card add-prod-card" onclick="abrirModalProducto(null)"><div class="plus">+</div>Nuevo producto</div>`;
+}
+function setProdCat(k){ prodCatActiva = k; renderProductos(); }
+function eliminarProducto(id){
+  confirmar('¿Eliminar este producto del catálogo?', async ()=>{
+    await conProductosFrescos(p=>{ p.lista = p.lista.filter(x=>x.id!==id); });
+    mostrarToast('Producto eliminado');
+    renderProductos(); renderCaja();
+  });
+}
+function abrirModalProducto(id){
+  const p = id ? PRODUCTOS.lista.find(x=>x.id===id) : null;
+  recetaTemp = p ? p.receta.map(r=>({...r})) : [];
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>${p ? 'Editar producto' : 'Nuevo producto'}</h3>
+    <div class="campo"><label>Nombre</label><input type="text" id="pm-nombre" value="${p?p.nombre:''}" placeholder="Ej: Cappuccino"></div>
+    <div class="campo campo-row">
+      <div><label>Categoría</label><select id="pm-cat">${Object.keys(CATEGORIAS).map(k=>`<option value="${k}" ${p&&p.cat===k?'selected':''}>${CATEGORIAS[k]}</option>`).join('')}</select></div>
+      <div><label>Precio</label><input type="number" id="pm-precio" value="${p?p.precio:''}" placeholder="Ej: 9500"></div>
+    </div>
+    <div class="img-ph" style="max-width:200px; aspect-ratio:4/3; margin-bottom:16px;"><span style="font-size:.68rem; color:var(--concreto);">Espacio para foto del producto</span></div>
+    <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Receta (consumo de inventario por unidad vendida)</label>
+    <div id="pm-receta-rows"></div>
+    <button type="button" class="link-btn" onclick="agregarFilaReceta()" style="margin-bottom:16px;">+ Agregar insumo a la receta</button>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-oro" onclick="guardarProductoModal('${p?p.id:''}')">${p?'Guardar cambios':'Crear producto'}</button>
+    </div>
+  </div></div>`;
+  renderFilasReceta();
+}
+function renderFilasReceta(){
+  const cont = document.getElementById('pm-receta-rows');
+  if(!INVENTARIO.lista.length){ cont.innerHTML = '<div class="vacio">Primero agrega insumos en Inventario</div>'; return; }
+  cont.innerHTML = recetaTemp.map((r,idx)=>{
+    const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId) || INVENTARIO.lista[0];
+    return `<div class="receta-row">
+      <select onchange="recetaTemp[${idx}].insumoId=this.value; renderFilasReceta();">
+        ${INVENTARIO.lista.map(i=>`<option value="${i.id}" ${i.id===r.insumoId?'selected':''}>${i.nombre}</option>`).join('')}
+      </select>
+      <input type="number" min="0" step="any" value="${r.cantidad}" oninput="recetaTemp[${idx}].cantidad=parseFloat(this.value)||0;">
+      <button type="button" onclick="recetaTemp.splice(${idx},1); renderFilasReceta();">✕</button>
+      <div class="receta-unidad">unidad: ${ins.unidad}</div>
+    </div>`;
+  }).join('');
+}
+function agregarFilaReceta(){
+  if(!INVENTARIO.lista.length){ mostrarToast('Primero agrega insumos en Inventario'); return; }
+  recetaTemp.push({ insumoId: INVENTARIO.lista[0].id, cantidad: 1 });
+  renderFilasReceta();
+}
+async function guardarProductoModal(id){
+  const nombre = document.getElementById('pm-nombre').value.trim();
+  const cat = document.getElementById('pm-cat').value;
+  const precio = toNum(document.getElementById('pm-precio').value);
+  if(!nombre){ mostrarToast('Escribe un nombre para el producto'); return; }
+  const receta = recetaTemp.filter(r=>r.insumoId && r.cantidad>0);
+  await conProductosFrescos(pr=>{
+    if(id){
+      const p = pr.lista.find(x=>x.id===id);
+      if(p){ p.nombre = nombre; p.cat = cat; p.precio = precio; p.receta = receta; }
+    }else{
+      pr.lista.push({ id: uid('p'), nombre, cat, precio, receta, activo:true });
+    }
+  });
+  mostrarToast(id ? 'Producto actualizado' : 'Producto creado');
+  document.getElementById('modal-root').innerHTML = '';
+  renderProductos(); renderCaja();
+}
+
+/* =========================================================
+   INVENTARIO
+   ========================================================= */
+function renderInventario(){
+  const bajos = insumosBajos();
+  document.getElementById('inventario-alerta').innerHTML = bajos.length ? `<div class="alerta-stock"><div class="ico">!</div>
+    <div class="txt"><b>${bajos.length}</b> insumo${bajos.length>1?'s':''} por debajo del mínimo. Actualiza el stock cuando llegue el pedido al proveedor.</div></div>` : '';
+
+  document.getElementById('inv-count').textContent = INVENTARIO.lista.length;
+  const body = document.getElementById('inv-tabla-body');
+  body.innerHTML = INVENTARIO.lista.length ? INVENTARIO.lista.map(i=>{
+    const agotado = i.stock <= 0;
+    const bajo = !agotado && i.stock <= i.minimo;
+    const clase = agotado ? 'agotado' : (bajo ? 'bajo' : 'ok');
+    return `<tr class="${agotado||bajo?'bajo':''}">
+      <td>${i.nombre}</td>
+      <td class="mono">${i.unidad}</td>
+      <td><span class="stock-badge ${clase}">${i.stock}${agotado?' · agotado':''}</span></td>
+      <td class="mono">${i.minimo}</td>
+      <td><div style="display:flex; gap:6px;">
+        <button class="btn btn-outline btn-sm" onclick="ajustarStock('${i.id}',-1)">–</button>
+        <input class="mini-input" type="number" id="ajuste-${i.id}" placeholder="cant.">
+        <button class="btn btn-outline btn-sm" onclick="ajustarStockInput('${i.id}')">+</button>
+      </div></td>
+      <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="6" class="vacio">Aún no hay insumos registrados</td></tr>`;
+}
+async function agregarInsumo(e){
+  e.preventDefault();
+  const nombre = document.getElementById('inv-nombre').value.trim();
+  if(!nombre) return false;
+  const insumo = {
+    id: uid('i'), nombre, unidad: document.getElementById('inv-unidad').value,
+    stock: parseFloat(document.getElementById('inv-stock').value)||0,
+    minimo: parseFloat(document.getElementById('inv-minimo').value)||0
+  };
+  await conInventarioFresco(inv=>{ inv.lista.push(insumo); });
+  document.getElementById('inv-nombre').value=''; document.getElementById('inv-stock').value=0; document.getElementById('inv-minimo').value=0;
+  mostrarToast('Insumo agregado');
+  renderInventario(); actualizarBadgeInventario();
+  return false;
+}
+async function ajustarStock(id, delta){
+  await conInventarioFresco(inv=>{
+    const i = inv.lista.find(x=>x.id===id);
+    if(i) i.stock = Math.max(0, i.stock + delta);
+  });
+  renderInventario(); actualizarBadgeInventario(); renderCaja();
+}
+async function ajustarStockInput(id){
+  const input = document.getElementById('ajuste-'+id);
+  const val = parseFloat(input.value);
+  if(!val) return;
+  let nombreIns = '';
+  await conInventarioFresco(inv=>{
+    const i = inv.lista.find(x=>x.id===id);
+    if(i){ i.stock = Math.max(0, i.stock + val); nombreIns = i.nombre; }
+  });
+  mostrarToast('Stock de ' + nombreIns + ' actualizado');
+  renderInventario(); actualizarBadgeInventario(); renderCaja();
+}
+function eliminarInsumo(id){
+  confirmar('¿Eliminar este insumo? Las recetas que lo usan quedarán sin ese ingrediente.', async ()=>{
+    await conInventarioFresco(inv=>{ inv.lista = inv.lista.filter(i=>i.id!==id); });
+    await conProductosFrescos(p=>{ p.lista.forEach(prod=>{ prod.receta = (prod.receta||[]).filter(r=>r.insumoId!==id); }); });
+    mostrarToast('Insumo eliminado');
+    renderInventario(); actualizarBadgeInventario(); renderProductos();
+  });
+}
+function abrirModalInsumo(id){
+  const i = INVENTARIO.lista.find(x=>x.id===id);
+  if(!i) return;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <h3 style="margin-bottom:16px;">Editar insumo</h3>
+    <div class="campo" style="text-align:left;"><label>Nombre</label><input type="text" id="im-nombre" value="${i.nombre}"></div>
+    <div class="campo-row" style="margin-bottom:13px;">
+      <div style="text-align:left;"><label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;">Unidad</label>
+        <select id="im-unidad">
+          <option value="unidad" ${i.unidad==='unidad'?'selected':''}>unidad</option><option value="g" ${i.unidad==='g'?'selected':''}>g</option>
+          <option value="kg" ${i.unidad==='kg'?'selected':''}>kg</option><option value="ml" ${i.unidad==='ml'?'selected':''}>ml</option>
+          <option value="l" ${i.unidad==='l'?'selected':''}>l</option>
+        </select>
+      </div>
+      <div style="text-align:left;"><label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;">Mínimo</label><input type="number" id="im-minimo" value="${i.minimo}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-oro" onclick="guardarInsumoModal('${id}')">Guardar</button>
+    </div>
+  </div></div>`;
+}
+async function guardarInsumoModal(id){
+  const nombre = document.getElementById('im-nombre').value.trim();
+  const unidad = document.getElementById('im-unidad').value;
+  const minimo = parseFloat(document.getElementById('im-minimo').value)||0;
+  if(!nombre){ mostrarToast('Escribe un nombre para el insumo'); return; }
+  await conInventarioFresco(inv=>{
+    const i = inv.lista.find(x=>x.id===id);
+    if(i){ i.nombre = nombre; i.unidad = unidad; i.minimo = minimo; }
+  });
+  document.getElementById('modal-root').innerHTML = '';
+  mostrarToast('Insumo actualizado');
+  renderInventario(); actualizarBadgeInventario(); renderProductos();
+}
+
+/* =========================================================
+   RESERVAS
+   ========================================================= */
+function setSubvistaReservas(s){
+  document.querySelectorAll('.subnav button[data-s]').forEach(b=>b.classList.toggle('active', b.dataset.s===s));
+  document.getElementById('reservas-lista-panel').classList.toggle('hidden', s!=='lista');
+  document.getElementById('reservas-horario-panel').classList.toggle('hidden', s!=='horario');
+}
+function setFiltroReserva(f){
+  filtroReserva = f;
+  document.querySelectorAll('.res-filtros button[data-f]').forEach(b=>b.classList.toggle('active', b.dataset.f===f));
+  renderReservas();
+}
+function guardarReserva(e){
+  e.preventDefault();
+  const id = document.getElementById('r-id').value;
+  const base = {
+    nombre: document.getElementById('r-nombre').value.trim(),
+    telefono: document.getElementById('r-telefono').value.trim(),
+    fecha: document.getElementById('r-fecha').value,
+    hora: document.getElementById('r-hora').value,
+    personas: parseInt(document.getElementById('r-personas').value || '1', 10),
+    motivo: document.getElementById('r-motivo').value,
+    notas: document.getElementById('r-notas').value.trim(),
+  };
+  conReservasFrescas(rs=>{
+    if(id){
+      const existente = rs.lista.find(r=>r.id===id);
+      if(existente) Object.assign(existente, base);
+    }else{
+      rs.lista.push({ id: uid('r'), ...base, estado:'pendiente', creada: Date.now() });
+    }
+  }).then(()=>{
+    mostrarToast(id ? 'Reserva actualizada' : 'Reserva guardada');
+    cancelarEdicionReserva();
+    renderReservas(); renderResumen();
+  });
+  return false;
+}
+function editarReserva(id){
+  const r = RESERVAS.lista.find(x=>x.id===id);
+  if(!r) return;
+  document.getElementById('r-id').value = r.id;
+  document.getElementById('r-nombre').value = r.nombre;
+  document.getElementById('r-telefono').value = r.telefono;
+  document.getElementById('r-fecha').value = r.fecha;
+  document.getElementById('r-hora').value = r.hora;
+  document.getElementById('r-personas').value = r.personas;
+  document.getElementById('r-motivo').value = r.motivo;
+  document.getElementById('r-notas').value = r.notas;
+  document.getElementById('form-reserva-titulo').textContent = 'Editar reserva';
+  document.getElementById('btn-guardar-reserva').textContent = 'Guardar cambios';
+  document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function cancelarEdicionReserva(){
+  document.getElementById('r-id').value = '';
+  document.querySelector('.form-reserva').reset();
+  document.getElementById('r-personas').value = 2;
+  document.getElementById('form-reserva-titulo').textContent = 'Nueva reserva';
+  document.getElementById('btn-guardar-reserva').textContent = 'Guardar reserva';
+  document.getElementById('btn-cancelar-edicion').classList.add('hidden');
+}
+async function cambiarEstadoReserva(id, estado){
+  await conReservasFrescas(rs=>{ const r = rs.lista.find(x=>x.id===id); if(r) r.estado = estado; });
+  renderReservas(); renderResumen();
+}
+function borrarReserva(id){
+  confirmar('¿Eliminar esta reserva definitivamente?', async ()=>{
+    await conReservasFrescas(rs=>{ rs.lista = rs.lista.filter(r=>r.id!==id); });
+    mostrarToast('Reserva eliminada');
+    renderReservas(); renderResumen();
+  });
+}
+function renderReservas(){
+  const hoy = hoyISO();
+  const buscar = (document.getElementById('res-buscar').value || '').toLowerCase();
+  let lista = [...RESERVAS.lista];
+  if(filtroReserva === 'hoy') lista = lista.filter(r=>r.fecha===hoy);
+  if(filtroReserva === 'proximas') lista = lista.filter(r=>r.fecha>=hoy && r.estado!=='cancelada');
+  if(buscar) lista = lista.filter(r=> r.nombre.toLowerCase().includes(buscar) || (r.telefono||'').includes(buscar));
+  lista.sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+
+  const cont = document.getElementById('lista-reservas');
+  if(!lista.length){ cont.innerHTML = '<div class="card"><div class="vacio">No hay reservas para mostrar</div></div>'; return; }
+
+  const grupos = {};
+  lista.forEach(r=>{ (grupos[r.fecha] = grupos[r.fecha] || []).push(r); });
+  cont.innerHTML = Object.keys(grupos).sort().map(fecha=>{
+    const esHoy = fecha === hoy;
+    const d = new Date(fecha+'T00:00:00');
+    const label = d.toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'});
+    const items = grupos[fecha].map(r=>`
+      <div class="res-card ${r.estado==='cancelada'?'cancelada':''}">
+        <div class="res-hora">${r.hora}</div>
+        <div class="res-info">
+          <div class="nom">${r.nombre} <span style="color:var(--concreto); font-weight:400; font-size:.8rem;">· ${r.personas} pers.</span></div>
+          <div class="meta"><span>${r.motivo}</span>${r.telefono ? `<span>${r.telefono}</span>` : ''}</div>
+          ${r.notas ? `<div class="notas">${r.notas}</div>` : ''}
+        </div>
+        <div class="res-acciones">
+          <select class="res-estado ${r.estado}" onchange="cambiarEstadoReserva('${r.id}', this.value)">
+            <option value="pendiente" ${r.estado==='pendiente'?'selected':''}>Pendiente</option>
+            <option value="confirmada" ${r.estado==='confirmada'?'selected':''}>Confirmada</option>
+            <option value="atendida" ${r.estado==='atendida'?'selected':''}>Atendida</option>
+            <option value="cancelada" ${r.estado==='cancelada'?'selected':''}>Cancelada</option>
+          </select>
+          <button class="link-btn" onclick="editarReserva('${r.id}')">Editar</button>
+          <button class="res-del" onclick="borrarReserva('${r.id}')">Eliminar</button>
+        </div>
+      </div>`).join('');
+    return `<div class="fecha-grupo"><div class="fecha-eyebrow">${label} ${esHoy?'<span class="hoy-chip">HOY</span>':''}</div>${items}</div>`;
+  }).join('');
+}
+
+/* =========================================================
+   ESTADISTICAS
+   ========================================================= */
+function setRangoStats(r){
+  rangoStats = r;
+  document.querySelectorAll('#rango-btns button').forEach(b=>b.classList.toggle('active', b.dataset.r===r));
+  renderEstadisticas();
+}
+function ventasEnRango(){
+  const hoy = hoyISO();
+  if(rangoStats==='hoy') return CAJA.ventas.filter(v=>v.fecha===hoy);
+  if(rangoStats==='semana'){
+    const limite = Date.now() - 7*24*60*60*1000;
+    return CAJA.ventas.filter(v=>v.ts >= limite);
+  }
+  return CAJA.ventas;
+}
+function renderEstadisticas(){
+  const ventas = ventasEnRango();
+  const total = ventas.reduce((a,v)=>a+v.total,0);
+  document.getElementById('es-total').textContent = fmt(total);
+  document.getElementById('es-count').textContent = ventas.length + (ventas.length===1?' venta':' ventas');
+  document.getElementById('es-promedio').textContent = fmt(ventas.length ? total/ventas.length : 0);
+
+  const porProducto = {};
+  ventas.forEach(v=>v.items.forEach(it=>{
+    const key = it.productoId || it.nombre;
+    if(!porProducto[key]) porProducto[key] = { nombre: it.nombre, cantidad:0, total:0 };
+    porProducto[key].cantidad += it.cantidad;
+    porProducto[key].total += it.precio*it.cantidad;
+  }));
+  const ranking = Object.values(porProducto).sort((a,b)=>b.cantidad-a.cantidad);
+
+  document.getElementById('es-top').textContent = ranking.length ? ranking[0].nombre : '—';
+  document.getElementById('es-top-sub').textContent = ranking.length ? ranking[0].cantidad + ' unidades vendidas' : '';
+
+  const maxCant = ranking.length ? ranking[0].cantidad : 1;
+  const rankBox = document.getElementById('es-ranking');
+  rankBox.innerHTML = ranking.length ? ranking.slice(0,8).map(r=>`
+    <div class="bar-row">
+      <div class="bar-label">${r.nombre}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(r.cantidad/maxCant*100)}%"></div></div>
+      <div class="bar-val">${r.cantidad} · ${fmt(r.total)}</div>
+    </div>`).join('') : '<div class="vacio">Aún no hay ventas en este rango</div>';
+
+  const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
+  ventas.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
+  const maxMetodo = Math.max(1, ...Object.values(porMetodo));
+  document.getElementById('es-metodos').innerHTML = Object.keys(METODOS).map(m=>`
+    <div class="bar-row">
+      <div class="bar-label">${METODOS[m].label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(porMetodo[m]/maxMetodo*100)}%"></div></div>
+      <div class="bar-val">${fmt(porMetodo[m])}</div>
+    </div>`).join('');
+}
+
+/* =========================================================
+   RESPALDO / EXPORTACIÓN
+   ========================================================= */
+function abrirModalRespaldo(){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Respaldo y exportación</h3>
+    <div class="respaldo-opcion">
+      <div class="txt">Respaldo completo<small>Todo: ventas, cierres, inventario, productos y reservas en un archivo .json</small></div>
+      <button class="btn btn-oro btn-sm" onclick="exportarRespaldoCompleto()">Descargar</button>
+    </div>
+    <div class="respaldo-opcion">
+      <div class="txt">Ventas de hoy (CSV)<small>Para abrir en Excel o enviar al contador</small></div>
+      <button class="btn btn-outline btn-sm" onclick="exportarVentasCSV('hoy')">Descargar</button>
+    </div>
+    <div class="respaldo-opcion">
+      <div class="txt">Todas las ventas (CSV)<small>Histórico completo de ventas registradas</small></div>
+      <button class="btn btn-outline btn-sm" onclick="exportarVentasCSV('todo')">Descargar</button>
+    </div>
+    <div class="respaldo-opcion">
+      <div class="txt">Reservas (CSV)<small>Todas las reservas guardadas</small></div>
+      <button class="btn btn-outline btn-sm" onclick="exportarReservasCSV()">Descargar</button>
+    </div>
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''" style="margin-top:6px;">Cerrar</button>
+  </div></div>`;
+}
+function descargarArchivo(nombre, contenido, tipo){
+  const blob = new Blob([contenido], {type: tipo});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  mostrarToast('Descarga iniciada: ' + nombre);
+}
+function csvEscape(v){ const s = String(v??''); return /[",\n;]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function exportarRespaldoCompleto(){
+  const data = { generado: new Date().toISOString(), caja: CAJA, reservas: RESERVAS, productos: PRODUCTOS, inventario: INVENTARIO };
+  descargarArchivo('cafe-real-respaldo-'+hoyISO()+'.json', JSON.stringify(data, null, 2), 'application/json');
+}
+function exportarVentasCSV(rango){
+  const ventas = rango==='hoy' ? CAJA.ventas.filter(v=>v.fecha===hoyISO()) : CAJA.ventas;
+  const filas = [['Fecha','Hora','Producto','Cantidad','Precio unitario','Subtotal','Total venta','Método','Cajero','Nota']];
+  ventas.forEach(v=>{
+    v.items.forEach(it=>{
+      filas.push([v.fecha, v.hora, it.nombre, it.cantidad, it.precio, it.precio*it.cantidad, v.total, METODOS[v.metodo]?.label||v.metodo, v.cajero||'', v.nota||'']);
+    });
+  });
+  const csv = filas.map(f=>f.map(csvEscape).join(';')).join('\n');
+  descargarArchivo('cafe-real-ventas-'+rango+'-'+hoyISO()+'.csv', '\uFEFF'+csv, 'text/csv;charset=utf-8');
+}
+function exportarReservasCSV(){
+  const filas = [['Fecha','Hora','Nombre','Teléfono','Personas','Motivo','Estado','Notas']];
+  RESERVAS.lista.forEach(r=>filas.push([r.fecha, r.hora, r.nombre, r.telefono, r.personas, r.motivo, r.estado, r.notas]));
+  const csv = filas.map(f=>f.map(csvEscape).join(';')).join('\n');
+  descargarArchivo('cafe-real-reservas-'+hoyISO()+'.csv', '\uFEFF'+csv, 'text/csv;charset=utf-8');
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+document.getElementById('r-fecha').valueAsDate = new Date();
+cargarDatos();
+</script>
+</body>
+</html>
