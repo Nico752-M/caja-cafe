@@ -713,7 +713,7 @@ async function oFetch(path, options={}){
   let r;
   try{ r = await fetch(ORACLE_BASE + path, opts); }
   catch(e){ throw new Error('No se pudo conectar con Oracle (revisa tu internet o CORS): ' + e.message); }
-  if(!r.ok){ const txt = await r.text().catch(()=>''); throw new Error(`${options.method||'GET'} ${path} → ${r.status}: ${txt.slice(0,200)}`); }
+  if(!r.ok){ const txt = await r.text().catch(()=>''); throw new Error(`${options.method||'GET'} ${path} → ${r.status}: ${txt}`); }
   if(r.status===204) return null;
   const txt = await r.text();
   return txt ? JSON.parse(txt) : null;
