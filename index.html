@@ -321,6 +321,7 @@ textarea{resize:vertical; min-height:56px;}
     <button data-v="reservas" onclick="cambiarVista('reservas')">Reservas</button>
     <button data-v="estadisticas" onclick="cambiarVista('estadisticas')">Estadísticas</button>
   </div>
+  <button class="icon-btn" onclick="sincronizarConOracle()" title="Sincronizar con Oracle">🔄</button>
   <button class="icon-btn" onclick="abrirModalRespaldo()" title="Exportar / respaldo">⤓</button>
   <div class="reloj" id="reloj"><strong>--:--</strong><span id="reloj-fecha">--</span></div>
 </div>
@@ -701,76 +702,93 @@ function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digi
 /* =========================================================
    CARGA / GUARDADO (compartido entre todos los que usan la app)
    ========================================================= */
+/* =========================================================
+   CONEXIÓN A ORACLE (ORDS AutoREST) — reemplaza window.storage
+   ========================================================= */
+const ORACLE_BASE = 'https://g473fddcae420b1-cafereal.adb.sa-bogota-1.oraclecloudapps.com/ords/dev_usuario/';
+
+async function oFetch(path, options={}){
+  const opts = { ...options, headers:{ 'Content-Type':'application/json', 'Accept':'application/json', ...(options.headers||{}) } };
+  if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+  let r;
+  try{ r = await fetch(ORACLE_BASE + path, opts); }
+  catch(e){ throw new Error('No se pudo conectar con Oracle (revisa tu internet o CORS): ' + e.message); }
+  if(!r.ok){ const txt = await r.text().catch(()=>''); throw new Error(`${options.method||'GET'} ${path} → ${r.status}: ${txt.slice(0,200)}`); }
+  if(r.status===204) return null;
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}
+/* trae TODAS las filas de una tabla, paginando si hace falta */
+async function oListAll(tabla){
+  let items = [], offset = 0; const limit = 500;
+  while(true){
+    const data = await oFetch(`${tabla}/?limit=${limit}&offset=${offset}`);
+    items = items.concat((data && data.items) || []);
+    if(!data || !data.hasMore) break;
+    offset += limit;
+  }
+  return items;
+}
+async function oInsert(tabla, fila){ return oFetch(`${tabla}/`, { method:'POST', body: fila }); }
+async function oUpdate(tabla, id, fila){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'PUT', body: fila }); }
+async function oDelete(tabla, id){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'DELETE' }); }
+function fechaOracleAISO(v){ return v ? String(v).slice(0,10) : null; }
+/* Oracle (vía ORDS) exige formato ISO completo para columnas DATE al enviar por REST */
+function aOracleFecha(iso){ return iso ? iso + 'T00:00:00Z' : null; }
+
+/* =========================================================
+   CARGA / GUARDADO — todo vive en Oracle ahora, esto solo sincroniza
+   la copia local en memoria que usa la interfaz.
+   ========================================================= */
 async function cargarDatos(){
   try{
-    const r = await window.storage.get('caja', true);
-    if(r && r.value) CAJA = JSON.parse(r.value);
-  }catch(e){}
-  try{
-    const r = await window.storage.get('reservas', true);
-    if(r && r.value) RESERVAS = JSON.parse(r.value);
-  }catch(e){}
-  try{
-    const r = await window.storage.get('inventario', true);
-    if(r && r.value) INVENTARIO = JSON.parse(r.value);
-    else { INVENTARIO = { lista: INSUMOS_SEED.map(i=>({ id:uid('i'), ...i })) }; await guardarInventario(); }
+    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows] = await Promise.all([
+      oListAll('insumos'), oListAll('productos'), oListAll('receta_items'), oListAll('caja_estado'),
+      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas')
+    ]);
+
+    INVENTARIO = { lista: insumosRows.map(r=>({ id:r.id, nombre:r.nombre, unidad:r.unidad, stock:Number(r.stock), minimo:Number(r.minimo) })) };
+
+    PRODUCTOS = { lista: productosRows.map(r=>({
+      id:r.id, nombre:r.nombre, cat:r.categoria, precio:Number(r.precio), activo: !!Number(r.activo),
+      receta: recetaRows.filter(x=>x.producto_id===r.id).map(x=>({ _rowId:x.id, insumoId:x.insumo_id, cantidad:Number(x.cantidad) }))
+    })) };
+
+    const estadoRow = estadoRows[0] || { id:1, abierta:0, apertura:0, fecha_apertura:null, cajero:null };
+    CAJA = {
+      estado:{ abierta: !!Number(estadoRow.abierta), apertura:Number(estadoRow.apertura||0), fechaApertura: fechaOracleAISO(estadoRow.fecha_apertura), cajero: estadoRow.cajero||null },
+      ventas: ventasRows.map(v=>({
+        id:v.id, ts:Number(v.ts), fecha: fechaOracleAISO(v.fecha), hora:v.hora,
+        subtotal:Number(v.subtotal), total:Number(v.total),
+        descuento: v.descuento_tipo ? { tipo:v.descuento_tipo, valor:Number(v.descuento_valor), motivo:v.descuento_motivo, monto:Number(v.descuento_monto) } : null,
+        metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
+        nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada),
+        items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) }))
+      })),
+      cierres: cierresRows.map(c=>{
+        const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
+        cierreMetodosRows.filter(x=>x.cierre_id===c.id).forEach(x=>{ porMetodo[x.metodo] = Number(x.total); });
+        return { id:c.id, fecha:fechaOracleAISO(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas), esperado:Number(c.esperado), contado:Number(c.contado), diferencia:Number(c.diferencia) };
+      })
+    };
+
+    RESERVAS = { lista: reservasRows.map(r=>({ id:r.id, nombre:r.nombre, telefono:r.telefono||'', fecha:fechaOracleAISO(r.fecha), hora:r.hora, personas:Number(r.personas), motivo:r.motivo, notas:r.notas||'', estado:r.estado, creada:Number(r.creada) })) };
+
+    mostrarToast('Datos cargados desde Oracle ✓');
   }catch(e){
-    INVENTARIO = { lista: INSUMOS_SEED.map(i=>({ id:uid('i'), ...i })) }; await guardarInventario();
-  }
-  try{
-    const r = await window.storage.get('productos', true);
-    if(r && r.value) PRODUCTOS = JSON.parse(r.value);
-    else { PRODUCTOS = { lista: construirProductosSemilla() }; await guardarProductos(); }
-  }catch(e){
-    PRODUCTOS = { lista: construirProductosSemilla() }; await guardarProductos();
+    console.error(e);
+    mostrarToast('No se pudo conectar con Oracle. Revisa la consola (F12) para más detalle.');
   }
   catActiva = Object.keys(CATEGORIAS)[0];
   renderTodo();
   const loader = document.getElementById('loader');
   if(loader){ loader.style.opacity='0'; setTimeout(()=>loader.remove(), 250); }
 }
-function construirProductosSemilla(){
-  const lista = [];
-  Object.keys(MENU_SEED).forEach(cat=>{
-    MENU_SEED[cat].forEach(([nombre, precio])=>{
-      const recetaDef = RECETAS_SEED[nombre];
-      const receta = recetaDef ? recetaDef.map(([insNombre, cant])=>{
-        const ins = INVENTARIO.lista.find(i=>i.nombre===insNombre);
-        return ins ? { insumoId: ins.id, cantidad: cant } : null;
-      }).filter(Boolean) : [];
-      lista.push({ id: uid('p'), cat, nombre, precio: toNum(precio), receta, activo:true });
-    });
-  });
-  return lista;
+async function sincronizarConOracle(){
+  mostrarToast('Sincronizando con Oracle…');
+  await cargarDatos();
 }
-async function guardarCaja(){ try{ await window.storage.set('caja', JSON.stringify(CAJA), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
-async function guardarReservas(){ try{ await window.storage.set('reservas', JSON.stringify(RESERVAS), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
-async function guardarInventario(){ try{ await window.storage.set('inventario', JSON.stringify(INVENTARIO), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
-async function guardarProductos(){ try{ await window.storage.set('productos', JSON.stringify(PRODUCTOS), true); }catch(e){ mostrarToast('No se pudo guardar. Revisa tu conexión.'); } }
 
-/* ---- lectura fresca antes de mutar: reduce (no elimina) choques cuando dos
-   dispositivos escriben casi al mismo tiempo. Cada mutación relee el dato
-   compartido más reciente, aplica el cambio ahí, y recién ahí guarda. ---- */
-async function conCajaFresca(mutador){
-  try{ const r = await window.storage.get('caja', true); if(r && r.value) CAJA = JSON.parse(r.value); }catch(e){}
-  mutador(CAJA);
-  await guardarCaja();
-}
-async function conInventarioFresco(mutador){
-  try{ const r = await window.storage.get('inventario', true); if(r && r.value) INVENTARIO = JSON.parse(r.value); }catch(e){}
-  mutador(INVENTARIO);
-  await guardarInventario();
-}
-async function conProductosFrescos(mutador){
-  try{ const r = await window.storage.get('productos', true); if(r && r.value) PRODUCTOS = JSON.parse(r.value); }catch(e){}
-  mutador(PRODUCTOS);
-  await guardarProductos();
-}
-async function conReservasFrescas(mutador){
-  try{ const r = await window.storage.get('reservas', true); if(r && r.value) RESERVAS = JSON.parse(r.value); }catch(e){}
-  mutador(RESERVAS);
-  await guardarReservas();
-}
 
 function mostrarToast(msg){
   const t = document.getElementById('toast');
@@ -909,14 +927,22 @@ function renderCaja(){
 async function abrirCaja(){
   const val = toNum(document.getElementById('input-apertura').value || 0);
   const cajero = document.getElementById('input-cajero').value.trim() || 'Sin nombre';
-  await conCajaFresca(c=>{ c.estado = { abierta:true, apertura:val, fechaApertura: hoyISO(), cajero }; });
-  mostrarToast('Caja abierta con base de ' + fmt(val));
-  renderCaja(); renderResumen();
+  const fecha = hoyISO();
+  try{
+    await oUpdate('caja_estado', 1, { id:1, abierta:1, apertura:val, fecha_apertura:aOracleFecha(fecha), cajero });
+    CAJA.estado = { abierta:true, apertura:val, fechaApertura: fecha, cajero };
+    mostrarToast('Caja abierta con base de ' + fmt(val));
+    renderCaja(); renderResumen();
+  }catch(e){ console.error(e); mostrarToast('No se pudo abrir la caja: revisa la conexión con Oracle'); }
 }
-function cambiarCajero(){
+async function cambiarCajero(){
   const nuevo = prompt('¿Quién atiende ahora?', CAJA.estado.cajero || '');
   if(nuevo === null || !nuevo.trim()) return;
-  conCajaFresca(c=>{ c.estado.cajero = nuevo.trim(); }).then(()=>renderCaja());
+  try{
+    await oUpdate('caja_estado', 1, { id:1, abierta:CAJA.estado.abierta?1:0, apertura:CAJA.estado.apertura, fecha_apertura:aOracleFecha(CAJA.estado.fechaApertura), cajero:nuevo.trim() });
+    CAJA.estado.cajero = nuevo.trim();
+    renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el cajero'); }
 }
 function confirmarCierre(){
   const contado = document.getElementById('input-contado').value;
@@ -936,19 +962,32 @@ function confirmarCierre(){
 async function cerrarCaja(){
   const hoy = hoyISO();
   const contado = toNum(document.getElementById('input-contado').value);
-  await conCajaFresca(c=>{
-    const ventasHoy = c.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  try{
+    const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
     const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
     ventasHoy.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
-    const esperado = c.estado.apertura + (porMetodo.efectivo||0);
-    c.cierres.push({ id:uid('c'), fecha:hoy, apertura:c.estado.apertura, cajero:c.estado.cajero, porMetodo,
+    const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0);
+    const cierreId = uid('c');
+    await oInsert('cierres', { id:cierreId, fecha:aOracleFecha(hoy), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
+      total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), esperado, contado, diferencia: contado-esperado });
+    for(const m of Object.keys(porMetodo)){
+      await oInsert('cierre_metodos', { id:uid('cm'), cierre_id:cierreId, metodo:m, total: porMetodo[m] });
+    }
+    for(const v of ventasHoy){
+      await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
+        descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
+        descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
+        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1 });
+      v.cerrada = true;
+    }
+    CAJA.cierres.push({ id:cierreId, fecha:hoy, cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
       totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), esperado, contado, diferencia: contado-esperado });
-    c.ventas.forEach(v=>{ if(v.fecha===hoy) v.cerrada = true; });
-    c.estado = { abierta:false, apertura:0, fechaApertura:null, cajero:null };
-  });
-  document.getElementById('input-contado').value = '';
-  mostrarToast('Caja cerrada. ¡Buen trabajo hoy!');
-  renderCaja(); renderResumen();
+    await oUpdate('caja_estado', 1, { id:1, abierta:0, apertura:0, fecha_apertura:null, cajero:null });
+    CAJA.estado = { abierta:false, apertura:0, fechaApertura:null, cajero:null };
+    document.getElementById('input-contado').value = '';
+    mostrarToast('Caja cerrada. ¡Buen trabajo hoy!');
+    renderCaja(); renderResumen();
+  }catch(e){ console.error(e); mostrarToast('No se pudo cerrar la caja: revisa la conexión con Oracle'); }
 }
 function renderCierrePreview(){
   const hoy = hoyISO();
@@ -1134,15 +1173,49 @@ async function cobrar(){
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
     cajero: CAJA.estado.cajero || null
   };
-  await conCajaFresca(c=>{ c.ventas.push(venta); });
-  await conInventarioFresco(inv=>{ descontarInventarioPorVenta(items); });
-  mostrarToast('Venta registrada · ' + fmt(total));
+  document.getElementById('btn-cobrar').disabled = true;
+  try{
+    await oInsert('ventas', {
+      id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
+      descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
+      descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
+      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0
+    });
+    for(const it of items){
+      await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+    }
+    await descontarInventarioEnOracle(items);
+    CAJA.ventas.push(venta);
+    mostrarToast('Venta registrada · ' + fmt(total));
 
-  const box = document.getElementById('post-venta-box');
-  box.innerHTML = `<div class="post-venta"><span>Venta guardada ✓</span><button class="btn btn-outline btn-sm" onclick='imprimirVenta(${JSON.stringify(venta).replace(/'/g,"&#39;")})'>Imprimir recibo</button></div>`;
+    const box = document.getElementById('post-venta-box');
+    box.innerHTML = `<div class="post-venta"><span>Venta guardada ✓</span><button class="btn btn-outline btn-sm" onclick='imprimirVenta(${JSON.stringify(venta).replace(/'/g,"&#39;")})'>Imprimir recibo</button></div>`;
 
-  vaciarPedido();
-  renderCaja(); renderResumen(); renderEstadisticas();
+    vaciarPedido();
+    renderCaja(); renderResumen(); renderEstadisticas();
+  }catch(e){
+    console.error(e);
+    mostrarToast('No se pudo guardar la venta en Oracle. Nada se cobró, intenta de nuevo.');
+    document.getElementById('btn-cobrar').disabled = false;
+  }
+}
+/* descuenta insumos leyendo el stock más reciente de Oracle justo antes de restar,
+   para minimizar el riesgo de choque si dos cajas venden al mismo tiempo */
+async function descontarInventarioEnOracle(itemsVenta){
+  const necesita = {}; // insumoId -> cantidad total a restar
+  itemsVenta.forEach(it=>{
+    const prod = PRODUCTOS.lista.find(p=>p.id===it.productoId);
+    if(!prod || !prod.receta || !prod.receta.length) return;
+    prod.receta.forEach(r=>{ necesita[r.insumoId] = (necesita[r.insumoId]||0) + r.cantidad*it.cantidad; });
+  });
+  for(const insumoId of Object.keys(necesita)){
+    const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
+    if(!fresco) continue;
+    const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
+    await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
+    const local = INVENTARIO.lista.find(i=>i.id===insumoId);
+    if(local) local.stock = nuevoStock;
+  }
 }
 
 /* historial de ventas por fecha */
@@ -1173,9 +1246,12 @@ function renderHistorialVentas(){
 }
 function anularVenta(id){
   confirmar('¿Anular esta venta? Se eliminará del historial de hoy.', async ()=>{
-    await conCajaFresca(c=>{ c.ventas = c.ventas.filter(v=>v.id!==id); });
-    mostrarToast('Venta anulada');
-    renderCaja(); renderResumen();
+    try{
+      await oDelete('ventas', id); // venta_items se borran solos (ON DELETE CASCADE)
+      CAJA.ventas = CAJA.ventas.filter(v=>v.id!==id);
+      mostrarToast('Venta anulada');
+      renderCaja(); renderResumen();
+    }catch(e){ console.error(e); mostrarToast('No se pudo anular la venta en Oracle'); }
   });
 }
 
@@ -1265,9 +1341,12 @@ function renderProductos(){
 function setProdCat(k){ prodCatActiva = k; renderProductos(); }
 function eliminarProducto(id){
   confirmar('¿Eliminar este producto del catálogo?', async ()=>{
-    await conProductosFrescos(p=>{ p.lista = p.lista.filter(x=>x.id!==id); });
-    mostrarToast('Producto eliminado');
-    renderProductos(); renderCaja();
+    try{
+      await oDelete('productos', id); // receta_items se borran solos (ON DELETE CASCADE)
+      PRODUCTOS.lista = PRODUCTOS.lista.filter(x=>x.id!==id);
+      mostrarToast('Producto eliminado');
+      renderProductos(); renderCaja();
+    }catch(e){ console.error(e); mostrarToast('No se pudo eliminar el producto en Oracle'); }
   });
 }
 function abrirModalProducto(id){
@@ -1318,17 +1397,34 @@ async function guardarProductoModal(id){
   const precio = toNum(document.getElementById('pm-precio').value);
   if(!nombre){ mostrarToast('Escribe un nombre para el producto'); return; }
   const receta = recetaTemp.filter(r=>r.insumoId && r.cantidad>0);
-  await conProductosFrescos(pr=>{
+  try{
     if(id){
-      const p = pr.lista.find(x=>x.id===id);
-      if(p){ p.nombre = nombre; p.cat = cat; p.precio = precio; p.receta = receta; }
+      await oUpdate('productos', id, { id, nombre, categoria:cat, precio, activo:1 });
+      const p = PRODUCTOS.lista.find(x=>x.id===id);
+      // borra las filas de receta viejas de este producto y crea las nuevas
+      for(const r of (p.receta||[])){ if(r._rowId) await oDelete('receta_items', r._rowId); }
+      const nuevaReceta = [];
+      for(const r of receta){
+        const rowId = uid('r');
+        await oInsert('receta_items', { id:rowId, producto_id:id, insumo_id:r.insumoId, cantidad:r.cantidad });
+        nuevaReceta.push({ _rowId:rowId, insumoId:r.insumoId, cantidad:r.cantidad });
+      }
+      if(p){ p.nombre = nombre; p.cat = cat; p.precio = precio; p.receta = nuevaReceta; }
     }else{
-      pr.lista.push({ id: uid('p'), nombre, cat, precio, receta, activo:true });
+      const nuevoId = uid('p');
+      await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1 });
+      const nuevaReceta = [];
+      for(const r of receta){
+        const rowId = uid('r');
+        await oInsert('receta_items', { id:rowId, producto_id:nuevoId, insumo_id:r.insumoId, cantidad:r.cantidad });
+        nuevaReceta.push({ _rowId:rowId, insumoId:r.insumoId, cantidad:r.cantidad });
+      }
+      PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, receta:nuevaReceta, activo:true });
     }
-  });
-  mostrarToast(id ? 'Producto actualizado' : 'Producto creado');
-  document.getElementById('modal-root').innerHTML = '';
-  renderProductos(); renderCaja();
+    mostrarToast(id ? 'Producto actualizado' : 'Producto creado');
+    document.getElementById('modal-root').innerHTML = '';
+    renderProductos(); renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo guardar el producto en Oracle'); }
 }
 
 /* =========================================================
@@ -1368,37 +1464,48 @@ async function agregarInsumo(e){
     stock: parseFloat(document.getElementById('inv-stock').value)||0,
     minimo: parseFloat(document.getElementById('inv-minimo').value)||0
   };
-  await conInventarioFresco(inv=>{ inv.lista.push(insumo); });
-  document.getElementById('inv-nombre').value=''; document.getElementById('inv-stock').value=0; document.getElementById('inv-minimo').value=0;
-  mostrarToast('Insumo agregado');
-  renderInventario(); actualizarBadgeInventario();
+  try{
+    await oInsert('insumos', insumo);
+    INVENTARIO.lista.push(insumo);
+    document.getElementById('inv-nombre').value=''; document.getElementById('inv-stock').value=0; document.getElementById('inv-minimo').value=0;
+    mostrarToast('Insumo agregado');
+    renderInventario(); actualizarBadgeInventario();
+  }catch(e){ console.error(e); mostrarToast('No se pudo agregar el insumo en Oracle'); }
   return false;
 }
 async function ajustarStock(id, delta){
-  await conInventarioFresco(inv=>{
-    const i = inv.lista.find(x=>x.id===id);
-    if(i) i.stock = Math.max(0, i.stock + delta);
-  });
-  renderInventario(); actualizarBadgeInventario(); renderCaja();
+  try{
+    const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
+    const nuevoStock = Math.max(0, Number(fresco.stock) + delta);
+    await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
+    const i = INVENTARIO.lista.find(x=>x.id===id);
+    if(i) i.stock = nuevoStock;
+    renderInventario(); actualizarBadgeInventario(); renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
 }
 async function ajustarStockInput(id){
   const input = document.getElementById('ajuste-'+id);
   const val = parseFloat(input.value);
   if(!val) return;
-  let nombreIns = '';
-  await conInventarioFresco(inv=>{
-    const i = inv.lista.find(x=>x.id===id);
-    if(i){ i.stock = Math.max(0, i.stock + val); nombreIns = i.nombre; }
-  });
-  mostrarToast('Stock de ' + nombreIns + ' actualizado');
-  renderInventario(); actualizarBadgeInventario(); renderCaja();
+  try{
+    const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
+    const nuevoStock = Math.max(0, Number(fresco.stock) + val);
+    await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
+    const i = INVENTARIO.lista.find(x=>x.id===id);
+    if(i) i.stock = nuevoStock;
+    mostrarToast('Stock de ' + fresco.nombre + ' actualizado');
+    renderInventario(); actualizarBadgeInventario(); renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
 }
 function eliminarInsumo(id){
   confirmar('¿Eliminar este insumo? Las recetas que lo usan quedarán sin ese ingrediente.', async ()=>{
-    await conInventarioFresco(inv=>{ inv.lista = inv.lista.filter(i=>i.id!==id); });
-    await conProductosFrescos(p=>{ p.lista.forEach(prod=>{ prod.receta = (prod.receta||[]).filter(r=>r.insumoId!==id); }); });
-    mostrarToast('Insumo eliminado');
-    renderInventario(); actualizarBadgeInventario(); renderProductos();
+    try{
+      await oDelete('insumos', id); // receta_items que lo usan se borran solos (ON DELETE CASCADE)
+      INVENTARIO.lista = INVENTARIO.lista.filter(i=>i.id!==id);
+      PRODUCTOS.lista.forEach(p=>{ p.receta = (p.receta||[]).filter(r=>r.insumoId!==id); });
+      mostrarToast('Insumo eliminado');
+      renderInventario(); actualizarBadgeInventario(); renderProductos();
+    }catch(e){ console.error(e); mostrarToast('No se pudo eliminar el insumo en Oracle'); }
   });
 }
 function abrirModalInsumo(id){
@@ -1429,13 +1536,14 @@ async function guardarInsumoModal(id){
   const unidad = document.getElementById('im-unidad').value;
   const minimo = parseFloat(document.getElementById('im-minimo').value)||0;
   if(!nombre){ mostrarToast('Escribe un nombre para el insumo'); return; }
-  await conInventarioFresco(inv=>{
-    const i = inv.lista.find(x=>x.id===id);
+  try{
+    const i = INVENTARIO.lista.find(x=>x.id===id);
+    await oUpdate('insumos', id, { id, nombre, unidad, stock:i?i.stock:0, minimo });
     if(i){ i.nombre = nombre; i.unidad = unidad; i.minimo = minimo; }
-  });
-  document.getElementById('modal-root').innerHTML = '';
-  mostrarToast('Insumo actualizado');
-  renderInventario(); actualizarBadgeInventario(); renderProductos();
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Insumo actualizado');
+    renderInventario(); actualizarBadgeInventario(); renderProductos();
+  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el insumo en Oracle'); }
 }
 
 /* =========================================================
@@ -1451,7 +1559,7 @@ function setFiltroReserva(f){
   document.querySelectorAll('.res-filtros button[data-f]').forEach(b=>b.classList.toggle('active', b.dataset.f===f));
   renderReservas();
 }
-function guardarReserva(e){
+async function guardarReserva(e){
   e.preventDefault();
   const id = document.getElementById('r-id').value;
   const base = {
@@ -1463,18 +1571,21 @@ function guardarReserva(e){
     motivo: document.getElementById('r-motivo').value,
     notas: document.getElementById('r-notas').value.trim(),
   };
-  conReservasFrescas(rs=>{
+  try{
     if(id){
-      const existente = rs.lista.find(r=>r.id===id);
+      const existente = RESERVAS.lista.find(r=>r.id===id);
+      await oUpdate('reservas', id, { id, ...base, fecha:aOracleFecha(base.fecha), estado: existente?existente.estado:'pendiente', creada: existente?existente.creada:Date.now() });
       if(existente) Object.assign(existente, base);
     }else{
-      rs.lista.push({ id: uid('r'), ...base, estado:'pendiente', creada: Date.now() });
+      const nuevoId = uid('r');
+      const nueva = { id:nuevoId, ...base, estado:'pendiente', creada: Date.now() };
+      await oInsert('reservas', { ...nueva, fecha:aOracleFecha(nueva.fecha) });
+      RESERVAS.lista.push(nueva);
     }
-  }).then(()=>{
     mostrarToast(id ? 'Reserva actualizada' : 'Reserva guardada');
     cancelarEdicionReserva();
     renderReservas(); renderResumen();
-  });
+  }catch(e){ console.error(e); mostrarToast('No se pudo guardar la reserva en Oracle'); }
   return false;
 }
 function editarReserva(id){
@@ -1502,14 +1613,22 @@ function cancelarEdicionReserva(){
   document.getElementById('btn-cancelar-edicion').classList.add('hidden');
 }
 async function cambiarEstadoReserva(id, estado){
-  await conReservasFrescas(rs=>{ const r = rs.lista.find(x=>x.id===id); if(r) r.estado = estado; });
-  renderReservas(); renderResumen();
+  try{
+    const r = RESERVAS.lista.find(x=>x.id===id);
+    if(!r) return;
+    await oUpdate('reservas', id, { id, nombre:r.nombre, telefono:r.telefono, fecha:aOracleFecha(r.fecha), hora:r.hora, personas:r.personas, motivo:r.motivo, notas:r.notas, estado, creada:r.creada });
+    r.estado = estado;
+    renderReservas(); renderResumen();
+  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el estado en Oracle'); }
 }
 function borrarReserva(id){
   confirmar('¿Eliminar esta reserva definitivamente?', async ()=>{
-    await conReservasFrescas(rs=>{ rs.lista = rs.lista.filter(r=>r.id!==id); });
-    mostrarToast('Reserva eliminada');
-    renderReservas(); renderResumen();
+    try{
+      await oDelete('reservas', id);
+      RESERVAS.lista = RESERVAS.lista.filter(r=>r.id!==id);
+      mostrarToast('Reserva eliminada');
+      renderReservas(); renderResumen();
+    }catch(e){ console.error(e); mostrarToast('No se pudo eliminar la reserva en Oracle'); }
   });
 }
 function renderReservas(){
