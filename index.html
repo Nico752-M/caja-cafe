@@ -762,6 +762,7 @@ let rangoStats = 'hoy';
 let recetaTemp = []; // usado mientras el modal de producto está abierto
 let pedidoPendienteEditando = null; // id de la venta pendiente a la que se le están agregando productos, o null
 let divisionState = null; // { ventaId, numPartes, items:[{productoId,nombre,precio,cantidadTotal,partes:[]}] }
+let detalleEditTemp = null; // { ventaId, items:[{productoId,nombre,precio,cantidad}] } copia editable de un pedido pendiente
 let reservaMesasSel = []; // mesas elegidas en el formulario de reserva actual
 
 function toggleMesaReserva(m){
@@ -841,6 +842,11 @@ async function oListAll(tabla){
 async function oInsert(tabla, fila){ return oFetch(`${tabla}/`, { method:'POST', body: fila }); }
 async function oUpdate(tabla, id, fila){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'PUT', body: fila }); }
 async function oDelete(tabla, id){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'DELETE' }); }
+async function itemsDeVenta(ventaId){
+  const q = encodeURIComponent(JSON.stringify({ venta_id: ventaId }));
+  const data = await oFetch(`venta_items/?q=${q}&limit=200`);
+  return (data && data.items) || [];
+}
 function fechaOracleAISO(v){ return v ? String(v).slice(0,10) : null; }
 /* Oracle (vía ORDS) exige formato ISO completo para columnas DATE al enviar por REST */
 function aOracleFecha(iso){ return iso ? iso + 'T00:00:00Z' : null; }
@@ -1065,7 +1071,7 @@ function renderPedidosPendientes(){
   cont.innerHTML = pendientes.length ? pendientes.map(v=>`
     <div class="fila-simple">
       <span class="n">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'} · ${resumenItems(v.items)}${v.nota?' · '+v.nota:''}</span>
-      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="iniciarAgregarAPendiente('${v.id}')">+ Agregar</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalDividir('${v.id}')">Dividir</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
+      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="abrirModalDetallePendiente('${v.id}')">Ver</button> <button class="link-btn" style="margin-left:8px;" onclick="imprimirComanda('${v.id}')">Comanda</button> <button class="link-btn" style="margin-left:8px;" onclick="iniciarAgregarAPendiente('${v.id}')">+ Agregar</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalDividir('${v.id}')">Dividir</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
     </div>`).join('') : '<div class="vacio">No hay cuentas pendientes de pago</div>';
 }
 let pendienteCobroActual = null;
@@ -1135,6 +1141,106 @@ async function confirmarCobroPendiente(){
     mostrarToast('Cuenta cobrada · ' + fmt(v.total));
     renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){ console.error(e); mostrarToast('No se pudo registrar el cobro en Oracle'); }
+}
+function abrirModalDetallePendiente(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  detalleEditTemp = { ventaId: id, items: v.items.map(it=>({...it})) };
+  renderModalDetallePendiente();
+}
+function cambiarCantidadDetalle(idx, delta){
+  const it = detalleEditTemp.items[idx];
+  it.cantidad += delta;
+  if(it.cantidad<=0) detalleEditTemp.items.splice(idx,1);
+  renderModalDetallePendiente();
+}
+function renderModalDetallePendiente(){
+  const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
+  const root = document.getElementById('modal-root');
+  const total = detalleEditTemp.items.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Detalle del pedido ${v.mesa?'· Mesa '+v.mesa:''}</h3>
+    <div style="margin-bottom:14px;">
+    ${detalleEditTemp.items.length ? detalleEditTemp.items.map((i,idx)=>`
+      <div class="recibo-item">
+        <div class="ri-nom">${i.nombre}<small>${fmt(i.precio)} c/u</small></div>
+        <div class="qty-ctrl"><button onclick="cambiarCantidadDetalle(${idx},-1)">–</button><span class="n">${i.cantidad}</span><button onclick="cambiarCantidadDetalle(${idx},1)">+</button></div>
+        <div class="ri-precio">${fmt(i.precio*i.cantidad)}</div>
+      </div>`).join('') : '<div class="vacio">Sin productos</div>'}
+    </div>
+    <div class="fila-simple" style="font-weight:600;"><span class="n">Total</span><span class="p">${fmt(total)}</span></div>
+    <div class="modal-actions" style="margin-top:16px; flex-wrap:wrap;">
+      <button class="btn btn-outline" onclick="imprimirComanda('${v.id}')">Imprimir comanda</button>
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cerrar</button>
+      <button class="btn btn-oro" onclick="guardarDetallePendiente()">Guardar cambios</button>
+    </div>
+  </div></div>`;
+}
+async function ajustarInventarioPorEdicion(itemsOriginales, itemsNuevos){
+  const cambioProducto = {};
+  itemsOriginales.forEach(it=>{ cambioProducto[it.productoId] = (cambioProducto[it.productoId]||0) - it.cantidad; });
+  itemsNuevos.forEach(it=>{ cambioProducto[it.productoId] = (cambioProducto[it.productoId]||0) + it.cantidad; });
+  const necesita = {};
+  Object.keys(cambioProducto).forEach(pid=>{
+    const delta = cambioProducto[pid];
+    if(!delta) return;
+    const prod = PRODUCTOS.lista.find(p=>p.id===pid);
+    if(!prod || !prod.receta || !prod.receta.length) return;
+    prod.receta.forEach(r=>{ necesita[r.insumoId] = (necesita[r.insumoId]||0) + r.cantidad*delta; });
+  });
+  for(const insumoId of Object.keys(necesita)){
+    if(!necesita[insumoId]) continue;
+    const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
+    if(!fresco) continue;
+    const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
+    await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
+    const local = INVENTARIO.lista.find(i=>i.id===insumoId);
+    if(local) local.stock = nuevoStock;
+  }
+}
+async function guardarDetallePendiente(){
+  const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
+  if(!v) return;
+  const nuevosItems = detalleEditTemp.items;
+  if(!nuevosItems.length){ mostrarToast('La cuenta debe tener al menos un producto'); return; }
+  try{
+    await ajustarInventarioPorEdicion(v.items, nuevosItems);
+    const filasExistentes = await itemsDeVenta(v.id);
+    for(const fila of filasExistentes){ await oDelete('venta_items', fila.id); }
+    for(const it of nuevosItems){
+      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+    }
+    const nuevoTotal = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
+    await oUpdate('ventas', v.id, {
+      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoTotal,
+      descuento_tipo:null, descuento_valor:null, descuento_motivo:null, descuento_monto:0,
+      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente'
+    });
+    v.items = nuevosItems; v.subtotal = nuevoTotal; v.total = nuevoTotal; v.descuento = null;
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Pedido actualizado');
+    renderCaja(); renderEstadisticas();
+  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el pedido en Oracle'); }
+}
+function imprimirComanda(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  const el = document.getElementById('recibo-imprimible');
+  el.innerHTML = `
+    <h4>CAFÉ REAL</h4>
+    <div class="centrado">COMANDA · PENDIENTE DE PAGO</div>
+    <div class="centrado">${new Date(v.ts).toLocaleString('es-CO')}</div>
+    <div class="ri-linea"></div>
+    ${v.mesa ? `<div class="centrado" style="margin-bottom:4px; font-weight:bold;">Mesa ${v.mesa}</div>` : '<div class="centrado" style="margin-bottom:4px;">Para llevar</div>'}
+    ${v.items.map(i=>`<div class="ri-fila"><span>${i.cantidad}× ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
+    <div class="ri-linea"></div>
+    <div class="ri-fila" style="font-weight:bold;"><span>TOTAL</span><span>${fmt(v.total)}</span></div>
+    ${v.cajero ? `<div class="ri-fila"><span>Atendió</span><span>${v.cajero}</span></div>` : ''}
+    ${v.nota ? `<div class="ri-linea"></div><div class="centrado">${v.nota}</div>` : ''}
+    <div class="ri-linea"></div>
+    <div class="centrado">Aún no pagado</div>
+  `;
+  setTimeout(()=>window.print(), 80);
 }
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
