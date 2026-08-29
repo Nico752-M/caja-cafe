@@ -761,6 +761,7 @@ let filtroReserva = 'hoy';
 let rangoStats = 'hoy';
 let recetaTemp = []; // usado mientras el modal de producto está abierto
 let pedidoPendienteEditando = null; // id de la venta pendiente a la que se le están agregando productos, o null
+let divisionState = null; // { ventaId, numPartes, items:[{productoId,nombre,precio,cantidadTotal,partes:[]}] }
 let reservaMesasSel = []; // mesas elegidas en el formulario de reserva actual
 
 function toggleMesaReserva(m){
@@ -1064,7 +1065,7 @@ function renderPedidosPendientes(){
   cont.innerHTML = pendientes.length ? pendientes.map(v=>`
     <div class="fila-simple">
       <span class="n">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'} · ${resumenItems(v.items)}${v.nota?' · '+v.nota:''}</span>
-      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="iniciarAgregarAPendiente('${v.id}')">+ Agregar</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
+      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="iniciarAgregarAPendiente('${v.id}')">+ Agregar</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalDividir('${v.id}')">Dividir</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
     </div>`).join('') : '<div class="vacio">No hay cuentas pendientes de pago</div>';
 }
 let pendienteCobroActual = null;
@@ -1418,6 +1419,110 @@ function metodoValido(total){
   const recibidoStr = document.getElementById('input-recibido').value;
   if(recibidoStr === '') return true;
   return toNum(recibidoStr) >= total;
+}
+function repartirParejo(cantidad, n){
+  const base = Math.floor(cantidad/n);
+  const resto = cantidad % n;
+  const partes = Array(n).fill(base);
+  for(let i=0;i<resto;i++) partes[i]++;
+  return partes;
+}
+function abrirModalDividir(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  if(v.descuento){ mostrarToast('No se puede dividir una cuenta con descuento o cortesía aplicada'); return; }
+  const totalUnidades = v.items.reduce((a,i)=>a+i.cantidad,0);
+  if(totalUnidades < 2){ mostrarToast('Se necesitan al menos 2 productos en la cuenta para dividirla'); return; }
+  divisionState = {
+    ventaId: id, numPartes: 2,
+    items: v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidadTotal: it.cantidad, partes: repartirParejo(it.cantidad, 2) }))
+  };
+  renderModalDividir();
+}
+function cambiarNumPartes(n){
+  divisionState.numPartes = n;
+  divisionState.items.forEach(it=>{ it.partes = repartirParejo(it.cantidadTotal, n); });
+  renderModalDividir();
+}
+function actualizarParte(itemIdx, parteIdx, val){
+  const cant = Math.max(0, parseInt(val)||0);
+  divisionState.items[itemIdx].partes[parteIdx] = cant;
+  renderModalDividir();
+}
+function renderModalDividir(){
+  const root = document.getElementById('modal-root');
+  const n = divisionState.numPartes;
+  const totalesPorParte = Array(n).fill(0);
+  let todoValido = true;
+  const filasHtml = divisionState.items.map((it, idx)=>{
+    const suma = it.partes.reduce((a,b)=>a+b,0);
+    const valido = suma === it.cantidadTotal;
+    if(!valido) todoValido = false;
+    it.partes.forEach((c,p)=>{ totalesPorParte[p] += c * it.precio; });
+    const inputs = it.partes.map((c,p)=>`<input type="number" min="0" class="mini-input" style="width:52px;" value="${c}" oninput="actualizarParte(${idx},${p},this.value)">`).join('');
+    return `<div style="display:grid; grid-template-columns:1.6fr repeat(${n},56px); gap:8px; align-items:center; margin-bottom:${valido?'8px':'2px'};">
+      <span style="font-size:.82rem;">${it.nombre} <span style="color:var(--concreto);">(${it.cantidadTotal})</span></span>
+      ${inputs}
+    </div>${!valido ? `<div style="color:var(--vino-suave); font-size:.7rem; margin-bottom:8px;">Asignado ${suma} de ${it.cantidadTotal}</div>` : ''}`;
+  }).join('');
+  const partesHeader = Array.from({length:n},(_,p)=>`<span style="font-size:.7rem; color:var(--concreto); text-align:center;">Cuenta ${p+1}</span>`).join('');
+  const totalesHtml = totalesPorParte.map(t=>`<span class="mono" style="font-size:.78rem; color:var(--oro-suave); text-align:center;">${fmt(t)}</span>`).join('');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Dividir cuenta</h3>
+    <div class="campo">
+      <label>¿En cuántas cuentas?</label>
+      <select onchange="cambiarNumPartes(parseInt(this.value))">
+        ${[2,3,4,5,6].map(x=>`<option value="${x}" ${x===n?'selected':''}>${x}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:grid; grid-template-columns:1.6fr repeat(${n},56px); gap:8px; margin-bottom:8px;">
+      <span></span>${partesHeader}
+    </div>
+    ${filasHtml}
+    <div style="display:grid; grid-template-columns:1.6fr repeat(${n},56px); gap:8px; margin-top:6px; padding-top:10px; border-top:1px solid var(--linea-fuerte);">
+      <span style="font-size:.78rem; color:var(--concreto);">Subtotal</span>${totalesHtml}
+    </div>
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-oro" ${todoValido?'':'disabled'} onclick="confirmarDivision()">Confirmar división</button>
+    </div>
+  </div></div>`;
+}
+async function confirmarDivision(){
+  const v = CAJA.ventas.find(x=>x.id===divisionState.ventaId);
+  if(!v) return;
+  const n = divisionState.numPartes;
+  const nuevasVentas = [];
+  for(let p=0; p<n; p++){
+    const itemsParte = divisionState.items.filter(it=>it.partes[p]>0).map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.partes[p] }));
+    if(!itemsParte.length) continue;
+    const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
+    nuevasVentas.push({
+      id: uid('v'), ts: Date.now(), fecha: v.fecha, hora: ahoraStr(), items: itemsParte, subtotal, total: subtotal,
+      descuento: null, metodo:null, recibido:null, cambio:null, nota: v.nota, cerrada:false,
+      cajero: v.cajero, mesa: v.mesa, estado:'pendiente'
+    });
+  }
+  if(nuevasVentas.length < 2){ mostrarToast('La división debe generar al menos 2 cuentas con productos'); return; }
+  try{
+    for(const nv of nuevasVentas){
+      await oInsert('ventas', {
+        id:nv.id, fecha:aOracleFecha(nv.fecha), hora:nv.hora, ts:nv.ts, subtotal:nv.subtotal,
+        descuento_tipo:null, descuento_valor:null, descuento_motivo:null, descuento_monto:0,
+        total:nv.total, metodo:null, recibido:null, cambio:null, nota:nv.nota, cajero:nv.cajero, cerrada:0, mesa:nv.mesa, estado:'pendiente'
+      });
+      for(const it of nv.items){
+        await oInsert('venta_items', { id:uid('vi'), venta_id:nv.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+      }
+    }
+    await oDelete('ventas', v.id);
+    CAJA.ventas = CAJA.ventas.filter(x=>x.id!==v.id);
+    nuevasVentas.forEach(nv=>CAJA.ventas.push(nv));
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Cuenta dividida en ' + nuevasVentas.length + ' cuentas');
+    divisionState = null;
+    renderCaja(); renderEstadisticas();
+  }catch(e){ console.error(e); mostrarToast('No se pudo dividir la cuenta en Oracle'); }
 }
 function iniciarAgregarAPendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
