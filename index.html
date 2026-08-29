@@ -428,7 +428,28 @@ textarea{resize:vertical; min-height:56px;}
           </div>
           <div class="cambio-line" id="cambio-line"></div>
 
-          <div class="recibo-notas"><input type="text" id="input-nota-venta" placeholder="Mesa / cliente (opcional)"></div>
+          <div class="campo" style="margin-top:12px;">
+            <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;">Mesa (opcional)</label>
+            <select id="input-mesa">
+              <option value="">Sin mesa / para llevar</option>
+              <option value="1">Mesa 1</option>
+              <option value="2">Mesa 2</option>
+              <option value="3">Mesa 3</option>
+              <option value="4">Mesa 4</option>
+              <option value="5">Mesa 5</option>
+              <option value="6">Mesa 6</option>
+              <option value="7">Mesa 7</option>
+              <option value="8">Mesa 8</option>
+              <option value="9">Mesa 9</option>
+              <option value="10">Mesa 10</option>
+              <option value="11">Mesa 11</option>
+              <option value="12">Mesa 12</option>
+              <option value="13">Mesa 13</option>
+              <option value="14">Mesa 14</option>
+              <option value="15">Mesa 15</option>
+            </select>
+          </div>
+          <div class="recibo-notas"><input type="text" id="input-nota-venta" placeholder="Nombre del cliente (opcional)"></div>
 
           <button class="btn btn-oro btn-block" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
           <button class="btn btn-outline btn-block" onclick="vaciarPedido()">Vaciar pedido</button>
@@ -443,7 +464,7 @@ textarea{resize:vertical; min-height:56px;}
           <div style="margin-bottom:12px;"><input type="date" id="hist-fecha" onchange="renderHistorialVentas()" style="max-width:180px;"></div>
           <div class="inv-tabla-wrap">
             <table class="hist-tabla" id="tabla-ventas">
-              <thead><tr><th>Hora</th><th>Detalle</th><th>Método</th><th>Total</th><th></th></tr></thead>
+              <thead><tr><th>Hora</th><th>Mesa</th><th>Detalle</th><th>Método</th><th>Total</th><th></th></tr></thead>
               <tbody id="tabla-ventas-body"></tbody>
             </table>
           </div>
@@ -774,7 +795,7 @@ async function cargarDatos(){
         subtotal:Number(v.subtotal), total:Number(v.total),
         descuento: v.descuento_tipo ? { tipo:v.descuento_tipo, valor:Number(v.descuento_valor), motivo:v.descuento_motivo, monto:Number(v.descuento_monto) } : null,
         metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
-        nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada),
+        nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
         items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) }))
       })),
       cierres: cierresRows.map(c=>{
@@ -1017,7 +1038,7 @@ async function cerrarCaja(){
       await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
         descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
         descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1 });
+        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa });
       v.cerrada = true;
     }
     CAJA.cierres.push({ id:cierreId, fecha:hoy, cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
@@ -1108,6 +1129,7 @@ function vaciarPedido(){
   descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
   document.getElementById('input-recibido').value = '';
   document.getElementById('input-nota-venta').value = '';
+  document.getElementById('input-mesa').value = '';
   document.getElementById('desc-valor').value = '';
   document.getElementById('desc-motivo').value = '';
   document.getElementById('descuento-form').classList.add('hidden');
@@ -1206,12 +1228,13 @@ async function cobrar(){
   const recibidoStr = document.getElementById('input-recibido').value;
   const recibido = metodoActual==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : total) : null;
   const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
+  const mesaVal = document.getElementById('input-mesa').value;
   const venta = {
     id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
     descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
     metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
-    cajero: CAJA.estado.cajero || null
+    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null
   };
   document.getElementById('btn-cobrar').disabled = true;
   try{
@@ -1219,7 +1242,7 @@ async function cobrar(){
       id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
       descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
       descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
-      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0
+      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa
     });
     for(const it of items){
       await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
@@ -1271,6 +1294,7 @@ function renderHistorialVentas(){
   body.innerHTML = ventasDia.length ? ventasDia.map(v=>`
     <tr>
       <td class="mono">${v.hora}</td>
+      <td class="mono">${v.mesa ? v.mesa : '—'}</td>
       <td>${v.items.map(i=>`${i.cantidad}× ${i.nombre}`).join(', ')}
         ${v.descuento ? `<br><span style="color:var(--vino-suave); font-size:.74rem;">${v.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${v.descuento.motivo}): -${fmt(v.descuento.monto)}</span>` : ''}
         ${v.nota?`<br><span style="color:var(--concreto); font-size:.74rem;">${v.nota}</span>`:''}
@@ -1282,7 +1306,7 @@ function renderHistorialVentas(){
         <button class="link-btn" onclick='imprimirVenta(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Imprimir</button>
         ${v.cerrada ? '' : `<button class="link-btn danger" onclick="anularVenta('${v.id}')">Anular</button>`}
       </div></td>
-    </tr>`).join('') : `<tr><td colspan="5" class="vacio">No hay ventas registradas ese día</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="6" class="vacio">No hay ventas registradas ese día</td></tr>`;
 }
 function anularVenta(id){
   confirmar('¿Anular esta venta? Se eliminará del historial de hoy.', async ()=>{
@@ -1305,6 +1329,7 @@ function imprimirVenta(venta){
     <div class="centrado">Centro de Negocios</div>
     <div class="centrado">${new Date(venta.ts).toLocaleString('es-CO')}</div>
     <div class="ri-linea"></div>
+    ${venta.mesa ? `<div class="centrado" style="margin-bottom:4px;">Mesa ${venta.mesa}</div>` : ''}
     ${venta.items.map(i=>`<div class="ri-fila"><span>${i.cantidad}× ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
     ${venta.descuento ? `<div class="ri-fila"><span>${venta.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${venta.descuento.motivo})</span><span>-${fmt(venta.descuento.monto)}</span></div>` : ''}
     <div class="ri-linea"></div>
