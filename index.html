@@ -719,8 +719,9 @@ function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digi
 const ORACLE_BASE = 'https://g473fddcae420b1-cafereal.adb.sa-bogota-1.oraclecloudapps.com/ords/dev_usuario/';
 
 async function oFetch(path, options={}){
-  const opts = { ...options, headers:{ 'Content-Type':'application/json', 'Accept':'application/json', ...(options.headers||{}) } };
+  const opts = { ...options, headers:{ 'Accept':'application/json', ...(options.headers||{}) } };
   if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+  if(opts.body) opts.headers['Content-Type'] = 'application/json';
   let r;
   try{ r = await fetch(ORACLE_BASE + path, opts); }
   catch(e){ throw new Error('No se pudo conectar con Oracle (revisa tu internet o CORS): ' + e.message); }
