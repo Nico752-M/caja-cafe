@@ -391,6 +391,10 @@ textarea{resize:vertical; min-height:56px;}
         <h3>Turnos de hoy</h3>
         <div id="turnos-hoy-lista"></div>
       </div>
+      <div class="card" style="margin-bottom:18px;">
+        <h3>Pedidos pendientes de pago <span class="ver-todo" id="pendientes-count">0</span></h3>
+        <div id="pedidos-pendientes-lista"></div>
+      </div>
       <div id="caja-alerta-stock"></div>
 
       <div class="caja-layout">
@@ -456,6 +460,7 @@ textarea{resize:vertical; min-height:56px;}
           <div class="recibo-notas"><input type="text" id="input-nota-venta" placeholder="Nombre del cliente (opcional)"></div>
 
           <button class="btn btn-oro btn-block" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
+          <button class="btn btn-outline btn-block" id="btn-dejar-pendiente" onclick="dejarPendiente()" disabled>Dejar pendiente (comanda)</button>
           <button class="btn btn-outline btn-block" onclick="vaciarPedido()">Vaciar pedido</button>
 
           <div id="post-venta-box"></div>
@@ -860,6 +865,7 @@ async function cargarDatos(){
         descuento: v.descuento_tipo ? { tipo:v.descuento_tipo, valor:Number(v.descuento_valor), motivo:v.descuento_motivo, monto:Number(v.descuento_monto) } : null,
         metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
         nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
+        estado: v.estado || 'pagada',
         items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) }))
       })),
       cierres: cierresRows.map(c=>{
@@ -1043,6 +1049,86 @@ function renderTurnosHoy(){
   cont.innerHTML = turnosHoy.length ? turnosHoy.map(t=>`
     <div class="fila-simple"><span class="n">${t.cajero}</span><span class="p">${t.horaInicio} – ${t.horaFin || 'en curso'}</span></div>`).join('') : '<div class="vacio">Aún no hay turnos hoy</div>';
 }
+function pedidosPendientes(){ return CAJA.ventas.filter(v=>v.estado==='pendiente').sort((a,b)=>a.ts-b.ts); }
+function renderPedidosPendientes(){
+  const cont = document.getElementById('pedidos-pendientes-lista');
+  if(!cont) return;
+  const pendientes = pedidosPendientes();
+  document.getElementById('pendientes-count').textContent = pendientes.length;
+  cont.innerHTML = pendientes.length ? pendientes.map(v=>`
+    <div class="fila-simple">
+      <span class="n">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'} · ${resumenItems(v.items)}${v.nota?' · '+v.nota:''}</span>
+      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
+    </div>`).join('') : '<div class="vacio">No hay cuentas pendientes de pago</div>';
+}
+let pendienteCobroActual = null;
+function abrirModalCobroPendiente(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  pendienteCobroActual = { id: v.id, metodo:'efectivo' };
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Cobrar cuenta ${v.mesa ? '· Mesa '+v.mesa : ''}</h3>
+    <div style="margin-bottom:14px;">
+      ${v.items.map(i=>`<div class="fila-simple"><span class="n">${i.cantidad}× ${i.nombre}</span><span class="p">${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
+      ${v.descuento ? `<div class="fila-simple"><span class="n">${v.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${v.descuento.motivo})</span><span class="p">-${fmt(v.descuento.monto)}</span></div>` : ''}
+      <div class="fila-simple" style="font-weight:600;"><span class="n">Total</span><span class="p">${fmt(v.total)}</span></div>
+    </div>
+    <div class="metodo-row" id="metodo-row-pendiente">
+      <button data-m="efectivo" class="active" onclick="setMetodoPendiente('efectivo')">Efectivo</button>
+      <button data-m="tarjeta" onclick="setMetodoPendiente('tarjeta')">Tarjeta</button>
+      <button data-m="nequi" onclick="setMetodoPendiente('nequi')">Nequi</button>
+      <button data-m="daviplata" onclick="setMetodoPendiente('daviplata')">Daviplata</button>
+      <button data-m="transferencia" onclick="setMetodoPendiente('transferencia')">Transf.</button>
+    </div>
+    <div class="efectivo-box" id="efectivo-box-pendiente" style="margin-top:12px;">
+      <input type="number" id="input-recibido-pendiente" placeholder="Recibido" inputmode="numeric" oninput="calcularCambioPendiente()">
+    </div>
+    <div class="cambio-line" id="cambio-line-pendiente"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-oro" onclick="confirmarCobroPendiente()">Confirmar cobro</button>
+    </div>
+  </div></div>`;
+}
+function setMetodoPendiente(m){
+  pendienteCobroActual.metodo = m;
+  document.querySelectorAll('#metodo-row-pendiente button').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
+  document.getElementById('efectivo-box-pendiente').classList.toggle('hidden', m!=='efectivo');
+  document.getElementById('cambio-line-pendiente').classList.toggle('hidden', m!=='efectivo');
+  calcularCambioPendiente();
+}
+function calcularCambioPendiente(){
+  const line = document.getElementById('cambio-line-pendiente');
+  const v = CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
+  if(pendienteCobroActual.metodo !== 'efectivo'){ line.innerHTML=''; return; }
+  const recibidoVal = document.getElementById('input-recibido-pendiente').value;
+  if(!recibidoVal){ line.innerHTML=''; return; }
+  const cambio = toNum(recibidoVal) - v.total;
+  line.className = 'cambio-line' + (cambio<0 ? ' neg' : '');
+  line.innerHTML = `<span>Cambio a devolver</span><strong>${fmt(Math.abs(cambio))}</strong>`;
+}
+async function confirmarCobroPendiente(){
+  const v = CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
+  if(!v) return;
+  const metodo = pendienteCobroActual.metodo;
+  const recibidoStr = document.getElementById('input-recibido-pendiente') ? document.getElementById('input-recibido-pendiente').value : '';
+  const recibido = metodo==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : v.total) : null;
+  if(metodo==='efectivo' && recibido < v.total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
+  const cambio = recibido!==null ? recibido - v.total : null;
+  try{
+    await oUpdate('ventas', v.id, {
+      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
+      descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
+      descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
+      total:v.total, metodo, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada'
+    });
+    v.metodo = metodo; v.recibido = recibido; v.cambio = cambio; v.estado = 'pagada';
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Cuenta cobrada · ' + fmt(v.total));
+    renderCaja(); renderResumen(); renderEstadisticas();
+  }catch(e){ console.error(e); mostrarToast('No se pudo registrar el cobro en Oracle'); }
+}
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
   const abiertaBox = document.getElementById('caja-abierta-box');
@@ -1055,7 +1141,7 @@ function renderCaja(){
     <div class="txt">Antes de vender más, repón: <b>${bajos.map(b=>b.nombre).join(', ')}</b></div>
     <button onclick="cambiarVista('inventario')">Ir a inventario →</button></div>` : '';
 
-  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy();
+  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy(); renderPedidosPendientes();
   if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
   renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
 }
@@ -1108,7 +1194,7 @@ function confirmarCierre(){
   const contado = document.getElementById('input-contado').value;
   if(contado === ''){ mostrarToast('Ingresa el efectivo contado antes de cerrar'); return; }
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
   const esperado = CAJA.estado.apertura + efectivo;
   const diff = toNum(contado) - esperado;
@@ -1123,7 +1209,7 @@ async function cerrarCaja(){
   const hoy = hoyISO();
   const contado = toNum(document.getElementById('input-contado').value);
   try{
-    const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+    const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
     const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
     ventasHoy.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
     const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0);
@@ -1137,7 +1223,7 @@ async function cerrarCaja(){
       await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
         descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
         descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa });
+        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada' });
       v.cerrada = true;
     }
     CAJA.cierres.push({ id:cierreId, fecha:hoy, cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
@@ -1152,7 +1238,7 @@ async function cerrarCaja(){
 }
 function renderCierrePreview(){
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
   const esperado = CAJA.estado.apertura + efectivo;
   document.getElementById('cierre-apertura').textContent = fmt(CAJA.estado.apertura);
@@ -1165,7 +1251,7 @@ function calcularDiferencia(){
   const contadoStr = document.getElementById('input-contado').value;
   if(contadoStr===''){ box.innerHTML=''; return; }
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada);
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
   const esperado = CAJA.estado.apertura + efectivo;
   const contado = toNum(contadoStr);
@@ -1293,6 +1379,7 @@ function renderPedido(){
   document.getElementById('recibo-total').textContent = fmt(total);
   calcularCambio();
   document.getElementById('btn-cobrar').disabled = keys.length===0 || !metodoValido(total);
+  document.getElementById('btn-dejar-pendiente').disabled = keys.length===0;
 }
 function setMetodo(m){
   metodoActual = m;
@@ -1318,6 +1405,44 @@ function metodoValido(total){
   const recibidoStr = document.getElementById('input-recibido').value;
   if(recibidoStr === '') return true;
   return toNum(recibidoStr) >= total;
+}
+async function dejarPendiente(){
+  const keys = Object.keys(pedido);
+  if(!keys.length) return;
+  const subtotal = totalPedido();
+  const montoDesc = calcularMontoDescuento(subtotal);
+  const total = Math.max(0, subtotal - montoDesc);
+  const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
+  const mesaVal = document.getElementById('input-mesa').value;
+  const venta = {
+    id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
+    descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
+    metodo: null, recibido: null, cambio: null,
+    nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
+    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null,
+    estado: 'pendiente'
+  };
+  document.getElementById('btn-dejar-pendiente').disabled = true;
+  try{
+    await oInsert('ventas', {
+      id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
+      descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
+      descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
+      total:venta.total, metodo:null, recibido:null, cambio:null, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pendiente'
+    });
+    for(const it of items){
+      await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+    }
+    await descontarInventarioEnOracle(items);
+    CAJA.ventas.push(venta);
+    mostrarToast('Pedido dejado pendiente' + (venta.mesa ? ' · Mesa '+venta.mesa : ''));
+    vaciarPedido();
+    renderCaja(); renderResumen(); renderEstadisticas();
+  }catch(e){
+    console.error(e);
+    mostrarToast('No se pudo guardar el pedido pendiente en Oracle');
+    document.getElementById('btn-dejar-pendiente').disabled = false;
+  }
 }
 async function cobrar(){
   const keys = Object.keys(pedido);
@@ -1400,7 +1525,7 @@ function renderHistorialVentas(){
         ${v.nota?`<br><span style="color:var(--concreto); font-size:.74rem;">${v.nota}</span>`:''}
         ${v.cajero?`<br><span style="color:var(--concreto); font-size:.7rem;">Atendió: ${v.cajero}</span>`:''}
       </td>
-      <td><span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span></td>
+      <td>${v.estado==='pendiente' ? '<span class="tag" style="background:rgba(211,162,78,.16); color:var(--oro-suave);">Pendiente</span>' : `<span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span>`}</td>
       <td class="mono">${fmt(v.total)}</td>
       <td><div class="fila-acciones">
         <button class="link-btn" onclick='imprimirVenta(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Imprimir</button>
@@ -1866,12 +1991,13 @@ function setRangoStats(r){
 }
 function ventasEnRango(){
   const hoy = hoyISO();
-  if(rangoStats==='hoy') return CAJA.ventas.filter(v=>v.fecha===hoy);
+  const pagadas = CAJA.ventas.filter(v=>v.estado!=='pendiente');
+  if(rangoStats==='hoy') return pagadas.filter(v=>v.fecha===hoy);
   if(rangoStats==='semana'){
     const limite = Date.now() - 7*24*60*60*1000;
-    return CAJA.ventas.filter(v=>v.ts >= limite);
+    return pagadas.filter(v=>v.ts >= limite);
   }
-  return CAJA.ventas;
+  return pagadas;
 }
 function renderEstadisticas(){
   const ventas = ventasEnRango();
