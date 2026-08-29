@@ -556,7 +556,11 @@ textarea{resize:vertical; min-height:56px;}
           <div class="campo"><label>Teléfono</label><input type="tel" id="r-telefono" placeholder="Ej: 3001234567"></div>
           <div class="campo campo-row">
             <div><label>Fecha</label><input type="date" id="r-fecha" required></div>
-            <div><label>Hora</label><input type="time" id="r-hora" required></div>
+            <div><label>Hora inicio</label><input type="time" id="r-hora" required onchange="sugerirHoraFin()"></div>
+          </div>
+          <div class="campo">
+            <label>Hora fin (para saber hasta cuándo ocupa la mesa)</label>
+            <input type="time" id="r-hora-fin" required>
           </div>
           <div class="campo campo-row">
             <div><label>Personas</label><input type="number" id="r-personas" min="1" value="2"></div>
@@ -566,6 +570,27 @@ textarea{resize:vertical; min-height:56px;}
                 <option value="Reunión de negocios">Reunión de negocios</option><option value="Cita">Cita</option>
                 <option value="Grupo grande">Grupo grande</option><option value="Otro">Otro</option>
               </select>
+            </div>
+          </div>
+          <div class="campo">
+            <label>Mesa(s) (opcional, se pueden elegir varias)</label>
+            <div class="cat-pills" id="r-mesas-pills" style="flex-wrap:wrap; overflow:visible; padding-bottom:0;">
+              <button type="button" data-m="piso2" onclick="toggleMesaReserva('piso2')">2do piso completo</button>
+              <button type="button" data-m="1" onclick="toggleMesaReserva('1')">1</button>
+              <button type="button" data-m="2" onclick="toggleMesaReserva('2')">2</button>
+              <button type="button" data-m="3" onclick="toggleMesaReserva('3')">3</button>
+              <button type="button" data-m="4" onclick="toggleMesaReserva('4')">4</button>
+              <button type="button" data-m="5" onclick="toggleMesaReserva('5')">5</button>
+              <button type="button" data-m="6" onclick="toggleMesaReserva('6')">6</button>
+              <button type="button" data-m="7" onclick="toggleMesaReserva('7')">7</button>
+              <button type="button" data-m="8" onclick="toggleMesaReserva('8')">8</button>
+              <button type="button" data-m="9" onclick="toggleMesaReserva('9')">9</button>
+              <button type="button" data-m="10" onclick="toggleMesaReserva('10')">10</button>
+              <button type="button" data-m="11" onclick="toggleMesaReserva('11')">11</button>
+              <button type="button" data-m="12" onclick="toggleMesaReserva('12')">12</button>
+              <button type="button" data-m="13" onclick="toggleMesaReserva('13')">13</button>
+              <button type="button" data-m="14" onclick="toggleMesaReserva('14')">14</button>
+              <button type="button" data-m="15" onclick="toggleMesaReserva('15')">15</button>
             </div>
           </div>
           <div class="campo"><label>Notas</label><textarea id="r-notas" placeholder="Detalles adicionales (opcional)"></textarea></div>
@@ -721,6 +746,41 @@ let prodCatActiva = 'todas';
 let filtroReserva = 'hoy';
 let rangoStats = 'hoy';
 let recetaTemp = []; // usado mientras el modal de producto está abierto
+let reservaMesasSel = []; // mesas elegidas en el formulario de reserva actual
+
+function toggleMesaReserva(m){
+  const idx = reservaMesasSel.indexOf(m);
+  if(idx>=0) reservaMesasSel.splice(idx,1); else reservaMesasSel.push(m);
+  renderMesasPillsReserva();
+}
+function renderMesasPillsReserva(){
+  document.querySelectorAll('#r-mesas-pills button').forEach(b=>b.classList.toggle('active', reservaMesasSel.includes(b.dataset.m)));
+}
+/* al elegir la hora de inicio, sugiere +2h como hora de fin si el campo está vacío */
+function sugerirHoraFin(){
+  const finInput = document.getElementById('r-hora-fin');
+  if(finInput.value) return;
+  const inicio = document.getElementById('r-hora').value;
+  if(!inicio) return;
+  const [h,m] = inicio.split(':').map(Number);
+  const total = (h*60+m+120) % (24*60);
+  finInput.value = String(Math.floor(total/60)).padStart(2,'0') + ':' + String(total%60).padStart(2,'0');
+}
+/* choque real usando hora de inicio y fin de cada reserva */
+function hayChoqueMesas(mesas, fecha, horaIni, horaFin, excluirId){
+  if(!mesas || !mesas.length || !fecha || !horaIni || !horaFin) return null;
+  const ini = new Date(fecha+'T'+horaIni+':00').getTime();
+  const fin = new Date(fecha+'T'+horaFin+':00').getTime();
+  const activas = RESERVAS.lista.filter(r=>r.id!==excluirId && r.estado!=='cancelada' && r.fecha===fecha && r.mesas && r.mesas.length && r.horaFin);
+  for(const r of activas){
+    const comparten = mesas.includes('piso2') || r.mesas.includes('piso2') || mesas.some(m=>r.mesas.includes(m));
+    if(!comparten) continue;
+    const ini2 = new Date(r.fecha+'T'+r.hora+':00').getTime();
+    const fin2 = new Date(r.fecha+'T'+r.horaFin+':00').getTime();
+    if(ini < fin2 && ini2 < fin) return r;
+  }
+  return null;
+}
 
 function hoyISO(){
   const d = new Date();
@@ -805,7 +865,7 @@ async function cargarDatos(){
       })
     };
 
-    RESERVAS = { lista: reservasRows.map(r=>({ id:r.id, nombre:r.nombre, telefono:r.telefono||'', fecha:fechaOracleAISO(r.fecha), hora:r.hora, personas:Number(r.personas), motivo:r.motivo, notas:r.notas||'', estado:r.estado, creada:Number(r.creada) })) };
+    RESERVAS = { lista: reservasRows.map(r=>({ id:r.id, nombre:r.nombre, telefono:r.telefono||'', fecha:fechaOracleAISO(r.fecha), hora:r.hora, horaFin:r.hora_fin||'', personas:Number(r.personas), motivo:r.motivo, notas:r.notas||'', estado:r.estado, creada:Number(r.creada), mesas: r.mesas ? String(r.mesas).split(',').filter(Boolean) : [] })) };
 
     mostrarToast('Datos cargados desde Oracle ✓');
   }catch(e){
@@ -1632,19 +1692,30 @@ async function guardarReserva(e){
     telefono: document.getElementById('r-telefono').value.trim(),
     fecha: document.getElementById('r-fecha').value,
     hora: document.getElementById('r-hora').value,
+    horaFin: document.getElementById('r-hora-fin').value,
     personas: parseInt(document.getElementById('r-personas').value || '1', 10),
     motivo: document.getElementById('r-motivo').value,
     notas: document.getElementById('r-notas').value.trim(),
+    mesas: reservaMesasSel.slice(),
   };
+  if(base.mesas.length && base.horaFin <= base.hora){
+    mostrarToast('La hora de fin debe ser posterior a la hora de inicio');
+    return false;
+  }
+  const choque = hayChoqueMesas(base.mesas, base.fecha, base.hora, base.horaFin, id);
+  if(choque){
+    mostrarToast(`Esa mesa ya está reservada por ${choque.nombre} de ${choque.hora} a ${choque.horaFin} ese día`);
+    return false;
+  }
   try{
     if(id){
       const existente = RESERVAS.lista.find(r=>r.id===id);
-      await oUpdate('reservas', id, { id, ...base, fecha:aOracleFecha(base.fecha), estado: existente?existente.estado:'pendiente', creada: existente?existente.creada:Date.now() });
+      await oUpdate('reservas', id, { id, ...base, mesas: base.mesas.join(','), hora_fin: base.horaFin, fecha:aOracleFecha(base.fecha), estado: existente?existente.estado:'pendiente', creada: existente?existente.creada:Date.now() });
       if(existente) Object.assign(existente, base);
     }else{
       const nuevoId = uid('r');
       const nueva = { id:nuevoId, ...base, estado:'pendiente', creada: Date.now() };
-      await oInsert('reservas', { ...nueva, fecha:aOracleFecha(nueva.fecha) });
+      await oInsert('reservas', { ...nueva, mesas: nueva.mesas.join(','), hora_fin: nueva.horaFin, fecha:aOracleFecha(nueva.fecha) });
       RESERVAS.lista.push(nueva);
     }
     mostrarToast(id ? 'Reserva actualizada' : 'Reserva guardada');
@@ -1661,27 +1732,33 @@ function editarReserva(id){
   document.getElementById('r-telefono').value = r.telefono;
   document.getElementById('r-fecha').value = r.fecha;
   document.getElementById('r-hora').value = r.hora;
+  document.getElementById('r-hora-fin').value = r.horaFin || '';
   document.getElementById('r-personas').value = r.personas;
   document.getElementById('r-motivo').value = r.motivo;
   document.getElementById('r-notas').value = r.notas;
   document.getElementById('form-reserva-titulo').textContent = 'Editar reserva';
   document.getElementById('btn-guardar-reserva').textContent = 'Guardar cambios';
   document.getElementById('btn-cancelar-edicion').classList.remove('hidden');
+  reservaMesasSel = (r.mesas||[]).slice();
+  renderMesasPillsReserva();
   window.scrollTo({top:0, behavior:'smooth'});
 }
 function cancelarEdicionReserva(){
   document.getElementById('r-id').value = '';
   document.querySelector('.form-reserva').reset();
+  document.getElementById('r-hora-fin').value = '';
   document.getElementById('r-personas').value = 2;
   document.getElementById('form-reserva-titulo').textContent = 'Nueva reserva';
   document.getElementById('btn-guardar-reserva').textContent = 'Guardar reserva';
   document.getElementById('btn-cancelar-edicion').classList.add('hidden');
+  reservaMesasSel = [];
+  renderMesasPillsReserva();
 }
 async function cambiarEstadoReserva(id, estado){
   try{
     const r = RESERVAS.lista.find(x=>x.id===id);
     if(!r) return;
-    await oUpdate('reservas', id, { id, nombre:r.nombre, telefono:r.telefono, fecha:aOracleFecha(r.fecha), hora:r.hora, personas:r.personas, motivo:r.motivo, notas:r.notas, estado, creada:r.creada });
+    await oUpdate('reservas', id, { id, nombre:r.nombre, telefono:r.telefono, fecha:aOracleFecha(r.fecha), hora:r.hora, personas:r.personas, motivo:r.motivo, notas:r.notas, estado, creada:r.creada, mesas:(r.mesas||[]).join(','), hora_fin:r.horaFin||null });
     r.estado = estado;
     renderReservas(); renderResumen();
   }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el estado en Oracle'); }
@@ -1719,7 +1796,7 @@ function renderReservas(){
         <div class="res-hora">${r.hora}</div>
         <div class="res-info">
           <div class="nom">${r.nombre} <span style="color:var(--concreto); font-weight:400; font-size:.8rem;">· ${r.personas} pers.</span></div>
-          <div class="meta"><span>${r.motivo}</span>${r.telefono ? `<span>${r.telefono}</span>` : ''}</div>
+          <div class="meta"><span>${r.motivo}</span>${r.telefono ? `<span>${r.telefono}</span>` : ''}${r.mesas && r.mesas.length ? `<span>${r.mesas.includes('piso2') ? '2do piso completo' : 'Mesa '+r.mesas.join(', ')}${r.horaFin ? ' hasta '+r.horaFin : ''}</span>` : ''}</div>
           ${r.notas ? `<div class="notas">${r.notas}</div>` : ''}
         </div>
         <div class="res-acciones">
