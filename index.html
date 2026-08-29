@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<<<<<<<<<<<<<<<<<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -26,7 +26,7 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--oro);}
 ::selection{background:var(--madera); color:var(--hierro);}
 .hidden{display:none !important;}
 
-/* ---------------- topbar ----------------- */
+/* ---------------- topbar ---------------- */
 .topbar{position:sticky; top:0; z-index:80; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 20px; background:rgba(21,18,14,.95); backdrop-filter:blur(8px); border-bottom:1px solid var(--linea);}
 .brand{display:flex; align-items:center; gap:10px; flex:0 0 auto;}
 .brand .mark{width:32px; height:32px; border-radius:50%; border:1px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:700; color:var(--oro); font-size:.85rem;}
@@ -362,6 +362,11 @@ textarea{resize:vertical; min-height:56px;}
         <h3>Próximas reservas <span class="ver-todo" onclick="cambiarVista('reservas')">Ir a reservas →</span></h3>
         <div id="resumen-proximas-reservas"></div>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Recordatorios de reservas</h3>
+      <div id="resumen-recordatorios"></div>
     </div>
   </section>
 
@@ -897,6 +902,7 @@ function renderResumen(){
     <div class="fila-simple"><span class="n">${r.fecha===hoy?'Hoy':fechaCorta(r.fecha)} · ${r.hora} — ${r.nombre}</span><span class="p">${r.personas} pers.</span></div>`).join('') : '<div class="vacio">No hay próximas reservas</div>';
 
   actualizarBadgeInventario();
+  renderRecordatoriosReservas();
 }
 function resumenItems(items){
   const total = items.reduce((a,i)=>a+i.cantidad,0);
@@ -904,6 +910,33 @@ function resumenItems(items){
   return total>1 ? `${primero} +${total-1}` : primero;
 }
 function fechaCorta(iso){ const d = new Date(iso+'T00:00:00'); return d.toLocaleDateString('es-CO',{day:'numeric', month:'short'}); }
+
+/* recordatorios internos de reservas: avisa cuando falta ~3h, ~1 día o ~2 días */
+function msHastaReserva(r){
+  const dt = new Date(r.fecha + 'T' + r.hora + ':00');
+  return dt.getTime() - Date.now();
+}
+function renderRecordatoriosReservas(){
+  const cont = document.getElementById('resumen-recordatorios');
+  if(!cont) return;
+  const H = 3600000;
+  const ventanas = [
+    { label:'Faltan ~3 horas', min:0, max:3.5*H },
+    { label:'Falta ~1 día', min:20*H, max:28*H },
+    { label:'Faltan ~2 días', min:44*H, max:52*H },
+  ];
+  const activas = RESERVAS.lista.filter(r=>r.estado!=='cancelada' && r.estado!=='atendida');
+  let html = '';
+  ventanas.forEach(v=>{
+    const enVentana = activas.filter(r=>{ const ms = msHastaReserva(r); return ms>=v.min && ms<=v.max; });
+    if(enVentana.length){
+      html += `<div class="fecha-eyebrow" style="margin-top:10px;">${v.label}</div>` + enVentana.map(r=>`
+        <div class="fila-simple"><span class="n">${r.nombre} · ${r.hora} · ${fechaCorta(r.fecha)} · ${r.personas} pers.</span><span class="p">${r.telefono||'Sin teléfono'}</span></div>`).join('');
+    }
+  });
+  cont.innerHTML = html || '<div class="vacio">No hay reservas próximas para avisar</div>';
+}
+setInterval(renderRecordatoriosReservas, 5*60*1000);
 
 /* =========================================================
    CAJA — apertura / cierre
