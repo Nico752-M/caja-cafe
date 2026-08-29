@@ -387,6 +387,10 @@ textarea{resize:vertical; min-height:56px;}
       <div class="eyebrow">Punto de venta</div>
       <h2 class="titulo-vista">Tomar pedido</h2>
       <div class="cajero-linea">Atiende: <b id="cajero-actual">—</b> <button onclick="cambiarCajero()">Cambiar</button></div>
+      <div class="card" style="margin-bottom:18px;">
+        <h3>Turnos de hoy</h3>
+        <div id="turnos-hoy-lista"></div>
+      </div>
       <div id="caja-alerta-stock"></div>
 
       <div class="caja-layout">
@@ -1031,6 +1035,14 @@ setInterval(renderRecordatoriosReservas, 5*60*1000);
 /* =========================================================
    CAJA — apertura / cierre
    ========================================================= */
+function renderTurnosHoy(){
+  const cont = document.getElementById('turnos-hoy-lista');
+  if(!cont) return;
+  const hoy = hoyISO();
+  const turnosHoy = CAJA.turnos.filter(t=>t.fecha===hoy).sort((a,b)=>a.tsInicio-b.tsInicio);
+  cont.innerHTML = turnosHoy.length ? turnosHoy.map(t=>`
+    <div class="fila-simple"><span class="n">${t.cajero}</span><span class="p">${t.horaInicio} – ${t.horaFin || 'en curso'}</span></div>`).join('') : '<div class="vacio">Aún no hay turnos hoy</div>';
+}
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
   const abiertaBox = document.getElementById('caja-abierta-box');
@@ -1043,7 +1055,7 @@ function renderCaja(){
     <div class="txt">Antes de vender más, repón: <b>${bajos.map(b=>b.nombre).join(', ')}</b></div>
     <button onclick="cambiarVista('inventario')">Ir a inventario →</button></div>` : '';
 
-  buildCatPills(); buildItemGrid(); renderPedido();
+  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy();
   if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
   renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
 }
