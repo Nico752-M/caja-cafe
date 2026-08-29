@@ -387,6 +387,10 @@ textarea{resize:vertical; min-height:56px;}
       <div class="eyebrow">Punto de venta</div>
       <h2 class="titulo-vista">Tomar pedido</h2>
       <div class="cajero-linea">Atiende: <b id="cajero-actual">—</b> <button onclick="cambiarCajero()">Cambiar</button></div>
+      <div id="banner-agregar-pendiente" class="hidden" style="background:rgba(211,162,78,.14); border:1px solid var(--linea-fuerte); border-radius:12px; padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+        <span style="font-size:.86rem;">Agregando productos a <b id="banner-agregar-mesa" style="color:var(--oro-suave);"></b> · elige abajo solo lo nuevo</span>
+        <button class="btn btn-outline btn-sm" onclick="vaciarPedido()">Cancelar</button>
+      </div>
       <div class="card" style="margin-bottom:18px;">
         <h3>Turnos de hoy</h3>
         <div id="turnos-hoy-lista"></div>
@@ -461,6 +465,7 @@ textarea{resize:vertical; min-height:56px;}
 
           <button class="btn btn-oro btn-block" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
           <button class="btn btn-outline btn-block" id="btn-dejar-pendiente" onclick="dejarPendiente()" disabled>Dejar pendiente (comanda)</button>
+          <button class="btn btn-oro btn-block hidden" id="btn-agregar-a-pendiente" onclick="confirmarAgregarAPendiente()" disabled>Agregar a la cuenta pendiente</button>
           <button class="btn btn-outline btn-block" onclick="vaciarPedido()">Vaciar pedido</button>
 
           <div id="post-venta-box"></div>
@@ -755,6 +760,7 @@ let prodCatActiva = 'todas';
 let filtroReserva = 'hoy';
 let rangoStats = 'hoy';
 let recetaTemp = []; // usado mientras el modal de producto está abierto
+let pedidoPendienteEditando = null; // id de la venta pendiente a la que se le están agregando productos, o null
 let reservaMesasSel = []; // mesas elegidas en el formulario de reserva actual
 
 function toggleMesaReserva(m){
@@ -1058,7 +1064,7 @@ function renderPedidosPendientes(){
   cont.innerHTML = pendientes.length ? pendientes.map(v=>`
     <div class="fila-simple">
       <span class="n">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'} · ${resumenItems(v.items)}${v.nota?' · '+v.nota:''}</span>
-      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
+      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="iniciarAgregarAPendiente('${v.id}')">+ Agregar</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
     </div>`).join('') : '<div class="vacio">No hay cuentas pendientes de pago</div>';
 }
 let pendienteCobroActual = null;
@@ -1312,6 +1318,8 @@ function cambiarCantidad(id, delta){
 }
 function vaciarPedido(){
   pedido = {};
+  pedidoPendienteEditando = null;
+  document.getElementById('banner-agregar-pendiente').classList.add('hidden');
   descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
   document.getElementById('input-recibido').value = '';
   document.getElementById('input-nota-venta').value = '';
@@ -1380,6 +1388,11 @@ function renderPedido(){
   calcularCambio();
   document.getElementById('btn-cobrar').disabled = keys.length===0 || !metodoValido(total);
   document.getElementById('btn-dejar-pendiente').disabled = keys.length===0;
+  document.getElementById('btn-agregar-a-pendiente').disabled = keys.length===0;
+  const editandoPendiente = !!pedidoPendienteEditando;
+  document.getElementById('btn-cobrar').classList.toggle('hidden', editandoPendiente);
+  document.getElementById('btn-dejar-pendiente').classList.toggle('hidden', editandoPendiente);
+  document.getElementById('btn-agregar-a-pendiente').classList.toggle('hidden', !editandoPendiente);
 }
 function setMetodo(m){
   metodoActual = m;
@@ -1405,6 +1418,48 @@ function metodoValido(total){
   const recibidoStr = document.getElementById('input-recibido').value;
   if(recibidoStr === '') return true;
   return toNum(recibidoStr) >= total;
+}
+function iniciarAgregarAPendiente(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  pedido = {};
+  pedidoPendienteEditando = id;
+  document.getElementById('banner-agregar-mesa').textContent = v.mesa ? 'Mesa '+v.mesa : 'el pedido para llevar';
+  document.getElementById('banner-agregar-pendiente').classList.remove('hidden');
+  buildItemGrid(); renderPedido();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+async function confirmarAgregarAPendiente(){
+  const id = pedidoPendienteEditando;
+  const v = CAJA.ventas.find(x=>x.id===id);
+  const keys = Object.keys(pedido);
+  if(!v || !keys.length) return;
+  const nuevosItems = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
+  const montoNuevo = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  const nuevoSubtotal = v.subtotal + montoNuevo;
+  const nuevoTotal = v.total + montoNuevo;
+  document.getElementById('btn-agregar-a-pendiente').disabled = true;
+  try{
+    for(const it of nuevosItems){
+      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+    }
+    await oUpdate('ventas', v.id, {
+      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoSubtotal,
+      descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
+      descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
+      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente'
+    });
+    await descontarInventarioEnOracle(nuevosItems);
+    v.items = v.items.concat(nuevosItems);
+    v.subtotal = nuevoSubtotal; v.total = nuevoTotal;
+    mostrarToast('Productos agregados a la cuenta' + (v.mesa ? ' · Mesa '+v.mesa : ''));
+    vaciarPedido();
+    renderCaja(); renderEstadisticas();
+  }catch(e){
+    console.error(e);
+    mostrarToast('No se pudo agregar los productos en Oracle');
+    document.getElementById('btn-agregar-a-pendiente').disabled = false;
+  }
 }
 async function dejarPendiente(){
   const keys = Object.keys(pedido);
