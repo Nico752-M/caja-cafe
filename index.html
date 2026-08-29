@@ -701,7 +701,13 @@ let filtroReserva = 'hoy';
 let rangoStats = 'hoy';
 let recetaTemp = []; // usado mientras el modal de producto está abierto
 
-function hoyISO(){ const d = new Date(); return d.toISOString().slice(0,10); }
+function hoyISO(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const dia = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${dia}`;
+}
 function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'}); }
 
 /* =========================================================
