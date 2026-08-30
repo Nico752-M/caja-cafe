@@ -1161,13 +1161,17 @@ async function confirmarCobroPendiente(){
   const recibido = metodo==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : v.total) : null;
   if(metodo==='efectivo' && recibido < v.total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
   const cambio = recibido!==null ? recibido - v.total : null;
+  const fechaCobro = hoyISO();
+  const horaCobro = ahoraStr();
+  const tsCobro = Date.now();
   try{
     await oUpdate('ventas', v.id, {
-      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
+      id:v.id, fecha:aOracleFecha(fechaCobro), hora:horaCobro, ts:tsCobro, subtotal:v.subtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
       total:v.total, metodo, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada'
     });
+    v.fecha = fechaCobro; v.hora = horaCobro; v.ts = tsCobro;
     v.metodo = metodo; v.recibido = recibido; v.cambio = cambio; v.estado = 'pagada';
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Cuenta cobrada · ' + fmt(v.total));
@@ -1798,7 +1802,7 @@ async function cobrar(){
       id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
       descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
       descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
-      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa
+      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pagada'
     });
     for(const it of items){
       await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
@@ -1864,13 +1868,32 @@ function renderHistorialVentas(){
       </div></td>
     </tr>`).join('') : `<tr><td colspan="6" class="vacio">No hay ventas registradas ese día</td></tr>`;
 }
+async function restaurarInventarioPorAnulacion(itemsVenta){
+  const necesita = {}; // insumoId -> cantidad total a devolver
+  itemsVenta.forEach(it=>{
+    const prod = PRODUCTOS.lista.find(p=>p.id===it.productoId);
+    if(!prod || !prod.receta || !prod.receta.length) return;
+    prod.receta.forEach(r=>{ necesita[r.insumoId] = (necesita[r.insumoId]||0) + r.cantidad*it.cantidad; });
+  });
+  for(const insumoId of Object.keys(necesita)){
+    if(!necesita[insumoId]) continue;
+    const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
+    if(!fresco) continue;
+    const nuevoStock = Number(fresco.stock) + necesita[insumoId];
+    await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
+    const local = INVENTARIO.lista.find(i=>i.id===insumoId);
+    if(local) local.stock = nuevoStock;
+  }
+}
 function anularVenta(id){
-  confirmar('¿Anular esta venta? Se eliminará del historial de hoy.', async ()=>{
+  confirmar('¿Anular esta venta? Se eliminará del historial de hoy y se devolverá el inventario que ya se había descontado.', async ()=>{
     try{
+      const v = CAJA.ventas.find(x=>x.id===id);
+      if(v) await restaurarInventarioPorAnulacion(v.items);
       await oDelete('ventas', id); // venta_items se borran solos (ON DELETE CASCADE)
-      CAJA.ventas = CAJA.ventas.filter(v=>v.id!==id);
-      mostrarToast('Venta anulada');
-      renderCaja(); renderResumen();
+      CAJA.ventas = CAJA.ventas.filter(x=>x.id!==id);
+      mostrarToast('Venta anulada e inventario devuelto');
+      renderCaja(); renderResumen(); actualizarBadgeInventario();
     }catch(e){ console.error(e); mostrarToast('No se pudo anular la venta en Oracle'); }
   });
 }
