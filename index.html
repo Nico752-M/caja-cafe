@@ -1147,7 +1147,7 @@ async function confirmarCobroPendiente(){
 function abrirModalDetallePendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
-  detalleEditTemp = { ventaId: id, items: v.items.map(it=>({...it})) };
+  detalleEditTemp = { ventaId: id, items: v.items.map(it=>({...it})), nota: v.nota || '', mesa: v.mesa || '' };
   renderModalDetallePendiente();
 }
 function cambiarCantidadDetalle(idx, delta){
@@ -1160,9 +1160,15 @@ function renderModalDetallePendiente(){
   const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
   const root = document.getElementById('modal-root');
   const total = detalleEditTemp.items.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  const mesaOpts = ['<option value="">Sin mesa / para llevar</option>'].concat(
+    Array.from({length:15},(_,i)=>i+1).map(n=>`<option value="${n}" ${String(detalleEditTemp.mesa)===String(n)?'selected':''}>Mesa ${n}</option>`)
+  ).join('');
   root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
-    <h3>Detalle del pedido ${v.mesa?'· Mesa '+v.mesa:''}</h3>
-    <div class="fila-simple"><span class="n">Cliente</span><span class="p">${v.nota || 'Sin nombre'}</span></div>
+    <h3>Detalle del pedido</h3>
+    <div class="campo-row" style="margin-bottom:14px;">
+      <div class="campo" style="margin-bottom:0;"><label>Cliente</label><input type="text" value="${detalleEditTemp.nota||''}" placeholder="Nombre del cliente" oninput="detalleEditTemp.nota=this.value"></div>
+      <div class="campo" style="margin-bottom:0;"><label>Mesa</label><select onchange="detalleEditTemp.mesa=this.value">${mesaOpts}</select></div>
+    </div>
     <div style="margin-bottom:14px;">
     ${detalleEditTemp.items.length ? detalleEditTemp.items.map((i,idx)=>`
       <div class="recibo-item">
@@ -1205,6 +1211,8 @@ async function guardarDetallePendiente(){
   if(!v) return;
   const nuevosItems = detalleEditTemp.items;
   if(!nuevosItems.length){ mostrarToast('La cuenta debe tener al menos un producto'); return; }
+  const nuevaNota = (detalleEditTemp.nota||'').trim();
+  const nuevaMesa = detalleEditTemp.mesa ? parseInt(detalleEditTemp.mesa,10) : null;
   try{
     await ajustarInventarioPorEdicion(v.items, nuevosItems);
     const filasExistentes = await itemsDeVenta(v.id);
@@ -1216,9 +1224,9 @@ async function guardarDetallePendiente(){
     await oUpdate('ventas', v.id, {
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoTotal,
       descuento_tipo:null, descuento_valor:null, descuento_motivo:null, descuento_monto:0,
-      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente'
+      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente'
     });
-    v.items = nuevosItems; v.subtotal = nuevoTotal; v.total = nuevoTotal; v.descuento = null;
+    v.items = nuevosItems; v.subtotal = nuevoTotal; v.total = nuevoTotal; v.descuento = null; v.nota = nuevaNota; v.mesa = nuevaMesa;
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Pedido actualizado');
     renderCaja(); renderEstadisticas();
