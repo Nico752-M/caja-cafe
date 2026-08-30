@@ -288,6 +288,17 @@ textarea{resize:vertical; min-height:56px;}
 .receta-row button{color:var(--vino-suave); font-size:1rem;}
 .receta-unidad{font-size:.7rem; color:var(--concreto); grid-column:1/3; margin-top:-4px; margin-bottom:2px;}
 
+/* ---------------- PLANO DE MESAS ---------------- */
+.mesas-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:10px;}
+.mesa-tile{aspect-ratio:1; border-radius:10px; border:2px solid var(--linea-fuerte); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-family:'IBM Plex Mono',monospace; transition:transform .12s;}
+.mesa-tile:active{transform:scale(.94);}
+.mesa-tile .num{font-size:1rem; font-weight:600;}
+.mesa-tile .estado-txt{font-size:.58rem; letter-spacing:.03em; text-transform:uppercase; opacity:.85;}
+.mesa-tile.libre{border-color:var(--linea-fuerte); color:var(--concreto);}
+.mesa-tile.ocupada{border-color:var(--vino-suave); background:rgba(198,91,91,.14); color:var(--vino-suave);}
+.mesa-tile.reservada{border-color:var(--oro); background:rgba(211,162,78,.14); color:var(--oro-suave);}
+.mesa-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle;}
+
 /* ---------------- DIVIDIR CUENTA ---------------- */
 .modal-sub{font-size:.78rem; color:var(--concreto); margin-bottom:18px;}
 .modo-toggle{display:flex; background:var(--panel-2); border:1px solid var(--linea); border-radius:10px; padding:4px; margin-bottom:20px;}
@@ -330,8 +341,10 @@ textarea{resize:vertical; min-height:56px;}
   #recibo-imprimible{display:block; position:absolute; left:0; top:0; width:78mm; padding:6px; font-family:'IBM Plex Mono',monospace; color:#000; background:#fff;}
   #recibo-imprimible .ri-linea{border-top:1px dashed #000; margin:6px 0;}
   #recibo-imprimible .ri-fila{display:flex; justify-content:space-between; font-size:11px; margin:2px 0;}
-  #recibo-imprimible h4{font-size:14px; text-align:center; margin-bottom:2px;}
+  #recibo-imprimible h4{font-size:15px; text-align:center; margin-bottom:1px; letter-spacing:.06em;}
+  #recibo-imprimible .ri-sub{text-align:center; font-size:9px; letter-spacing:.1em; margin-bottom:6px;}
   #recibo-imprimible .centrado{text-align:center; font-size:10px;}
+  #recibo-imprimible .ri-total-final{font-size:13px; font-weight:bold; margin:4px 0;}
 }
 </style>
 </head>
@@ -427,6 +440,15 @@ textarea{resize:vertical; min-height:56px;}
         <div id="turnos-hoy-lista"></div>
       </div>
       <div class="card" style="margin-bottom:18px;">
+        <h3>Plano de mesas</h3>
+        <div style="display:flex; gap:16px; margin-bottom:14px; font-size:.74rem; color:var(--concreto); flex-wrap:wrap;">
+          <span><span class="mesa-dot" style="background:var(--concreto);"></span>Libre</span>
+          <span><span class="mesa-dot" style="background:var(--vino-suave);"></span>Ocupada</span>
+          <span><span class="mesa-dot" style="background:var(--oro);"></span>Reservada ahora</span>
+        </div>
+        <div class="mesas-grid" id="mesas-grid"></div>
+      </div>
+      <div class="card" style="margin-bottom:18px;">
         <h3>Pedidos pendientes de pago <span class="ver-todo" id="pendientes-count">0</span></h3>
         <div id="pedidos-pendientes-lista"></div>
       </div>
@@ -455,6 +477,18 @@ textarea{resize:vertical; min-height:56px;}
             <input type="text" id="desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
             <button type="button" class="btn btn-oro btn-sm" onclick="aplicarDescuento()">Aplicar</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="quitarDescuento()">Quitar</button>
+          </div>
+          <div id="servicio-linea" class="hidden" style="display:flex; justify-content:space-between; font-size:.82rem; color:var(--salvia-suave); margin:6px 0;">
+            <span id="servicio-label">Servicio</span><span id="servicio-valor" class="mono">+$0</span>
+          </div>
+          <button type="button" class="link-btn" id="btn-toggle-servicio" onclick="toggleServicioForm()">+ Propina / servicio</button>
+          <div id="servicio-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <select id="serv-valor" onchange="if(this.value!=='otro') document.getElementById('serv-otro').classList.add('hidden'); else document.getElementById('serv-otro').classList.remove('hidden');">
+              <option value="10">10%</option><option value="12">12%</option><option value="15">15%</option><option value="otro">Otro %</option>
+            </select>
+            <input type="number" id="serv-otro" placeholder="Ej: 8" class="hidden">
+            <button type="button" class="btn btn-oro btn-sm" onclick="aplicarServicio()">Aplicar</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="quitarServicio()">Quitar</button>
           </div>
           <div class="recibo-total-row"><span class="tl">Total</span><span class="tv mono" id="recibo-total">$0</span></div>
 
@@ -495,7 +529,7 @@ textarea{resize:vertical; min-height:56px;}
           <div class="recibo-notas"><input type="text" id="input-nota-venta" placeholder="Nombre del cliente (opcional)"></div>
 
           <button class="btn btn-oro btn-block" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
-          <button class="btn btn-outline btn-block" id="btn-dejar-pendiente" onclick="dejarPendiente()" disabled>Dejar pendiente (comanda)</button>
+          <button class="btn btn-outline btn-block" id="btn-dejar-pendiente" onclick="dejarPendiente()" disabled>Dejar pendiente</button>
           <button class="btn btn-oro btn-block hidden" id="btn-agregar-a-pendiente" onclick="confirmarAgregarAPendiente()" disabled>Agregar a la cuenta pendiente</button>
           <button class="btn btn-outline btn-block" onclick="vaciarPedido()">Vaciar pedido</button>
 
@@ -785,6 +819,7 @@ let INVENTARIO = { lista:[] };
 
 let pedido = {}; // productoId -> {productoId, nombre, precio, cantidad}
 let descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
+let servicioActual = { activo:false, porcentaje:0 };
 let metodoActual = 'efectivo';
 let catActiva = null;
 let prodCatActiva = 'todas';
@@ -1093,6 +1128,37 @@ function renderTurnosHoy(){
   cont.innerHTML = turnosHoy.length ? turnosHoy.map(t=>`
     <div class="fila-simple"><span class="n">${t.cajero}</span><span class="p">${t.horaInicio} – ${t.horaFin || 'en curso'}</span></div>`).join('') : '<div class="vacio">Aún no hay turnos hoy</div>';
 }
+function estadoMesaAhora(n){
+  const ocupada = CAJA.ventas.some(v=>v.estado==='pendiente' && v.mesa===n);
+  if(ocupada) return 'ocupada';
+  const hoy = hoyISO();
+  const ahoraMin = (()=>{ const d=new Date(); return d.getHours()*60+d.getMinutes(); })();
+  const reservadaAhora = RESERVAS.lista.some(r=>{
+    if(r.estado==='cancelada' || r.fecha!==hoy || !r.horaFin) return false;
+    if(!(r.mesas||[]).includes('piso2') && !(r.mesas||[]).includes(String(n))) return false;
+    const [h1,m1] = r.hora.split(':').map(Number);
+    const [h2,m2] = r.horaFin.split(':').map(Number);
+    const ahoraTotal = ahoraMin, ini = h1*60+m1, fin = h2*60+m2;
+    return ahoraTotal >= ini && ahoraTotal <= fin;
+  });
+  return reservadaAhora ? 'reservada' : 'libre';
+}
+function renderMesasGrid(){
+  const grid = document.getElementById('mesas-grid');
+  if(!grid) return;
+  const etiquetas = { libre:'Libre', ocupada:'Ocupada', reservada:'Reservada' };
+  grid.innerHTML = Array.from({length:15},(_,i)=>i+1).map(n=>{
+    const est = estadoMesaAhora(n);
+    return `<button type="button" class="mesa-tile ${est}" onclick="elegirMesaDesdeGrid(${n})">
+      <span class="num">${n}</span><span class="estado-txt">${etiquetas[est]}</span>
+    </button>`;
+  }).join('');
+}
+function elegirMesaDesdeGrid(n){
+  if(pedidoPendienteEditando){ mostrarToast('Termina o cancela el pedido que estás agregando antes de elegir otra mesa'); return; }
+  document.getElementById('input-mesa').value = String(n);
+  mostrarToast('Mesa ' + n + ' seleccionada para el pedido actual');
+}
 function pedidosPendientes(){ return CAJA.ventas.filter(v=>v.estado==='pendiente').sort((a,b)=>a.ts-b.ts); }
 function renderPedidosPendientes(){
   const cont = document.getElementById('pedidos-pendientes-lista');
@@ -1279,7 +1345,7 @@ function renderCaja(){
     <div class="txt">Antes de vender más, repón: <b>${bajos.map(b=>b.nombre).join(', ')}</b></div>
     <button onclick="cambiarVista('inventario')">Ir a inventario →</button></div>` : '';
 
-  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy(); renderPedidosPendientes();
+  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy(); renderMesasGrid(); renderPedidosPendientes();
   if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
   renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
 }
@@ -1453,12 +1519,15 @@ function vaciarPedido(){
   pedidoPendienteEditando = null;
   document.getElementById('banner-agregar-pendiente').classList.add('hidden');
   descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
+  servicioActual = { activo:false, porcentaje:0 };
   document.getElementById('input-recibido').value = '';
   document.getElementById('input-nota-venta').value = '';
   document.getElementById('input-mesa').value = '';
   document.getElementById('desc-valor').value = '';
   document.getElementById('desc-motivo').value = '';
   document.getElementById('descuento-form').classList.add('hidden');
+  document.getElementById('serv-otro').value = '';
+  document.getElementById('servicio-form').classList.add('hidden');
   buildItemGrid(); renderPedido();
 }
 function totalPedido(){ return Object.values(pedido).reduce((a,i)=>a + i.precio*i.cantidad, 0); }
@@ -1490,6 +1559,29 @@ function quitarDescuento(){
   document.getElementById('desc-motivo').value = '';
   renderPedido();
 }
+function toggleServicioForm(){ document.getElementById('servicio-form').classList.toggle('hidden'); }
+function aplicarServicio(){
+  const sel = document.getElementById('serv-valor').value;
+  const porcentaje = sel==='otro' ? (parseFloat(document.getElementById('serv-otro').value)||0) : parseFloat(sel);
+  if(porcentaje<=0){ mostrarToast('Ingresa un porcentaje de servicio válido'); return; }
+  servicioActual = { activo:true, porcentaje };
+  document.getElementById('servicio-form').classList.add('hidden');
+  mostrarToast('Servicio aplicado');
+  renderPedido();
+}
+function quitarServicio(){
+  servicioActual = { activo:false, porcentaje:0 };
+  document.getElementById('serv-otro').value = '';
+  renderPedido();
+}
+function calcularMontoServicio(base){
+  if(!servicioActual.activo) return 0;
+  return Math.round(base * servicioActual.porcentaje/100);
+}
+function totalConServicio(){
+  const base = totalConDescuento();
+  return base + calcularMontoServicio(base);
+}
 function renderPedido(){
   document.getElementById('recibo-hora').textContent = ahoraStr();
   const lista = document.getElementById('recibo-lista');
@@ -1505,7 +1597,9 @@ function renderPedido(){
 
   const subtotal = totalPedido();
   const montoDesc = calcularMontoDescuento(subtotal);
-  const total = Math.max(0, subtotal - montoDesc);
+  const baseConDesc = Math.max(0, subtotal - montoDesc);
+  const montoServ = calcularMontoServicio(baseConDesc);
+  const total = baseConDesc + montoServ;
   document.getElementById('recibo-subtotal').textContent = fmt(subtotal);
   const descLinea = document.getElementById('descuento-linea');
   if(montoDesc > 0){
@@ -1515,6 +1609,14 @@ function renderPedido(){
     document.getElementById('descuento-valor').textContent = '-' + fmt(montoDesc);
   }else{ descLinea.classList.add('hidden'); }
   document.getElementById('btn-toggle-descuento').textContent = montoDesc>0 ? 'Editar descuento / cortesía' : '+ Descuento / cortesía';
+
+  const servLinea = document.getElementById('servicio-linea');
+  if(montoServ > 0){
+    servLinea.classList.remove('hidden');
+    document.getElementById('servicio-label').textContent = `Servicio ${servicioActual.porcentaje}%`;
+    document.getElementById('servicio-valor').textContent = '+' + fmt(montoServ);
+  }else{ servLinea.classList.add('hidden'); }
+  document.getElementById('btn-toggle-servicio').textContent = montoServ>0 ? 'Editar propina / servicio' : '+ Propina / servicio';
 
   document.getElementById('recibo-total').textContent = fmt(total);
   calcularCambio();
@@ -1536,7 +1638,7 @@ function setMetodo(m){
 function calcularCambio(){
   const line = document.getElementById('cambio-line');
   if(metodoActual !== 'efectivo'){ line.innerHTML=''; return; }
-  const total = totalConDescuento();
+  const total = totalConServicio();
   const recibidoVal = document.getElementById('input-recibido').value;
   if(!recibidoVal){ line.innerHTML=''; document.getElementById('btn-cobrar').disabled = Object.keys(pedido).length===0; return; }
   const recibido = toNum(recibidoVal);
@@ -1746,12 +1848,15 @@ async function dejarPendiente(){
   if(!keys.length) return;
   const subtotal = totalPedido();
   const montoDesc = calcularMontoDescuento(subtotal);
-  const total = Math.max(0, subtotal - montoDesc);
+  const baseConDesc = Math.max(0, subtotal - montoDesc);
+  const montoServ = calcularMontoServicio(baseConDesc);
+  const total = baseConDesc + montoServ;
   const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
   const mesaVal = document.getElementById('input-mesa').value;
   const venta = {
     id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
     descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
+    servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: null, recibido: null, cambio: null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
     cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null,
@@ -1784,7 +1889,9 @@ async function cobrar(){
   if(!keys.length) return;
   const subtotal = totalPedido();
   const montoDesc = calcularMontoDescuento(subtotal);
-  const total = Math.max(0, subtotal - montoDesc);
+  const baseConDesc = Math.max(0, subtotal - montoDesc);
+  const montoServ = calcularMontoServicio(baseConDesc);
+  const total = baseConDesc + montoServ;
   const recibidoStr = document.getElementById('input-recibido').value;
   const recibido = metodoActual==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : total) : null;
   const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
@@ -1792,11 +1899,12 @@ async function cobrar(){
   const venta = {
     id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
     descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
+    servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
-    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null
+    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null, estado:'pagada'
   };
-  document.getElementById('btn-cobrar').disabled = true;
+  document.getElementById('btn-cobrar').disabled = true;  
   try{
     await oInsert('ventas', {
       id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
@@ -1809,7 +1917,7 @@ async function cobrar(){
     }
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
-    mostrarToast('Venta registrada · ' + fmt(total));
+    mostrarToast('Venta registrada · ' + fmt(total)); 
 
     const box = document.getElementById('post-venta-box');
     box.innerHTML = `<div class="post-venta"><span>Venta guardada ✓</span><button class="btn btn-outline btn-sm" onclick='imprimirVenta(${JSON.stringify(venta).replace(/'/g,"&#39;")})'>Imprimir recibo</button></div>`;
@@ -1903,22 +2011,30 @@ function anularVenta(id){
    ========================================================= */
 function imprimirVenta(venta){
   const el = document.getElementById('recibo-imprimible');
+  const fechaHora = new Date(venta.ts).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
   el.innerHTML = `
     <h4>CAFÉ REAL</h4>
-    <div class="centrado">Centro de Negocios</div>
-    <div class="centrado">${new Date(venta.ts).toLocaleString('es-CO')}</div>
+    <div class="ri-sub">CENTRO DE NEGOCIOS</div>
+    <div class="centrado">Cra. 44 #37-156, Tuluá, Valle</div>
     <div class="ri-linea"></div>
-    ${venta.mesa ? `<div class="centrado" style="margin-bottom:4px;">Mesa ${venta.mesa}</div>` : ''}
-    ${venta.items.map(i=>`<div class="ri-fila"><span>${i.cantidad}× ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
-    ${venta.descuento ? `<div class="ri-fila"><span>${venta.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${venta.descuento.motivo})</span><span>-${fmt(venta.descuento.monto)}</span></div>` : ''}
+    <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
+    ${venta.cajero ? `<div class="ri-fila"><span>ATENDIÓ:</span><span>${venta.cajero}</span></div>` : ''}
+    ${venta.nota ? `<div class="ri-fila"><span>CLIENTE:</span><span>${venta.nota}</span></div>` : ''}
+    ${venta.mesa ? `<div class="ri-fila"><span>MESA:</span><span>${venta.mesa}</span></div>` : ''}
+    <div class="ri-fila"><span>FORMA PAGO:</span><span>${METODOS[venta.metodo]?.label||venta.metodo}</span></div>
     <div class="ri-linea"></div>
-    <div class="ri-fila" style="font-weight:bold;"><span>TOTAL</span><span>${fmt(venta.total)}</span></div>
-    <div class="ri-fila"><span>Método</span><span>${METODOS[venta.metodo]?.label||venta.metodo}</span></div>
+    ${venta.items.map(i=>`<div class="ri-fila" style="font-weight:600;"><span>${i.cantidad} x ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div><div class="ri-fila" style="font-size:9px; color:#333; margin-top:-2px;"><span>${fmt(i.precio)} c/u</span><span></span></div>`).join('')}
+    <div class="ri-linea"></div>
+    <div class="ri-fila"><span>SUBTOTAL:</span><span>${fmt(venta.subtotal)}</span></div>
+    ${venta.descuento ? `<div class="ri-fila"><span>${venta.descuento.tipo==='cortesia'?'CORTESÍA':'DESCUENTO'} (${venta.descuento.motivo}):</span><span>-${fmt(venta.descuento.monto)}</span></div>` : ''}
+    ${venta.servicioMonto>0 ? `<div class="ri-fila"><span>PROPINA (Sugerida):</span><span>${fmt(venta.servicioMonto)}</span></div>` : ''}
+    <div class="ri-linea"></div>
+    <div class="ri-fila ri-total-final"><span>TOTAL A PAGAR:</span><span>${fmt(venta.total)}</span></div>
     ${venta.recibido!=null ? `<div class="ri-fila"><span>Recibido</span><span>${fmt(venta.recibido)}</span></div><div class="ri-fila"><span>Cambio</span><span>${fmt(venta.cambio)}</span></div>` : ''}
-    ${venta.cajero ? `<div class="ri-fila"><span>Atendió</span><span>${venta.cajero}</span></div>` : ''}
-    ${venta.nota ? `<div class="ri-linea"></div><div class="centrado">${venta.nota}</div>` : ''}
     <div class="ri-linea"></div>
-    <div class="centrado">¡Gracias por su visita!</div>
+    <div class="centrado">¡Gracias por hacer negocios con nosotros!</div>
+    <div class="centrado">cafereal.vercel.app</div>
+    <div class="centrado">IG: @caferealtulua</div>
   `;
   setTimeout(()=>window.print(), 80);
 }
@@ -2294,6 +2410,17 @@ function borrarReserva(id){
     }catch(e){ console.error(e); mostrarToast('No se pudo eliminar la reserva en Oracle'); }
   });
 }
+function iniciarPedidoDesdeReserva(id){
+  const r = RESERVAS.lista.find(x=>x.id===id);
+  if(!r) return;
+  if(!CAJA.estado.abierta){ mostrarToast('Primero abre la caja para tomar el pedido'); return; }
+  cambiarVista('caja');
+  vaciarPedido();
+  const mesaNum = (r.mesas||[]).find(m=>m!=='piso2');
+  document.getElementById('input-mesa').value = mesaNum || '';
+  document.getElementById('input-nota-venta').value = r.nombre || '';
+  mostrarToast('Pedido listo para ' + r.nombre + (mesaNum ? ' · Mesa '+mesaNum : ''));
+}
 function renderReservas(){
   const hoy = hoyISO();
   const buscar = (document.getElementById('res-buscar').value || '').toLowerCase();
@@ -2321,6 +2448,7 @@ function renderReservas(){
           ${r.notas ? `<div class="notas">${r.notas}</div>` : ''}
         </div>
         <div class="res-acciones">
+          ${r.estado!=='cancelada' ? `<button class="link-btn" onclick="iniciarPedidoDesdeReserva('${r.id}')">Iniciar pedido</button>` : ''}
           <select class="res-estado ${r.estado}" onchange="cambiarEstadoReserva('${r.id}', this.value)">
             <option value="pendiente" ${r.estado==='pendiente'?'selected':''}>Pendiente</option>
             <option value="confirmada" ${r.estado==='confirmada'?'selected':''}>Confirmada</option>
