@@ -299,6 +299,105 @@ textarea{resize:vertical; min-height:56px;}
 .mesa-tile.reservada{border-color:var(--oro); background:rgba(211,162,78,.14); color:var(--oro-suave);}
 .mesa-dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle;}
 
+/* ---------------- SIDEBAR DE CAJA (hamburguesa) ---------------- */
+.hamburguesa{width:40px; height:40px; border-radius:10px; border:1px solid var(--linea-fuerte); display:inline-flex; align-items:center; justify-content:center; position:relative; transition:border-color .15s, background .15s; vertical-align:middle; margin-left:10px;}
+.hamburguesa:hover{border-color:var(--oro); background:var(--panel);}
+.hamburguesa .linea{width:17px; height:2px; background:var(--oro-suave); border-radius:2px; position:absolute; transition:transform .25s, opacity .2s;}
+.hamburguesa .linea:nth-child(1){transform:translateY(-5px);}
+.hamburguesa .linea:nth-child(3){transform:translateY(5px);}
+.hamburguesa.open .linea:nth-child(1){transform:translateY(0) rotate(45deg);}
+.hamburguesa.open .linea:nth-child(2){opacity:0;}
+.hamburguesa.open .linea:nth-child(3){transform:translateY(0) rotate(-45deg);}
+.hamburguesa .badge-total{position:absolute; top:-6px; left:-6px; background:var(--vino-suave); color:#fff; font-size:.6rem; min-width:16px; height:16px; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:0 4px; font-weight:700;}
+
+.caja-sidebar-backdrop{position:fixed; inset:0; background:rgba(10,8,5,.6); backdrop-filter:blur(2px); z-index:150; opacity:0; pointer-events:none; transition:opacity .25s;}
+.caja-sidebar-backdrop.show{opacity:1; pointer-events:auto;}
+.caja-sidebar{position:fixed; top:0; right:0; bottom:0; width:380px; max-width:92vw; background:var(--hierro-2); border-left:1px solid var(--linea-fuerte); z-index:151; transform:translateX(100%); transition:transform .3s cubic-bezier(.32,.72,0,1); overflow-y:auto; padding:18px 16px 40px; display:flex; flex-direction:column;}
+.caja-sidebar.show{transform:translateX(0);}
+.caja-sidebar-head{display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; margin-bottom:14px; border-bottom:1px solid var(--linea);}
+.caja-sidebar-head h3{font-size:1.05rem; font-weight:600;}
+.caja-sidebar-head button{width:32px; height:32px; border-radius:8px; border:1px solid var(--linea); font-size:1rem; color:var(--concreto); display:flex; align-items:center; justify-content:center;}
+.caja-sidebar-head button:hover{border-color:var(--oro); color:var(--oro);}
+
+.acordeon{border:1px solid var(--linea); border-radius:12px; margin-bottom:10px; overflow:hidden; background:var(--panel);}
+.acordeon-head{width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px; font-size:.85rem; font-weight:600; color:var(--crema); text-align:left; gap:10px;}
+.acordeon-head .lado-izq{display:flex; align-items:center; gap:9px;}
+.acordeon-head .ico{width:26px; height:26px; border-radius:7px; background:var(--panel-2); display:flex; align-items:center; justify-content:center; font-size:.82rem; flex:0 0 auto;}
+.acordeon-head .badge{background:var(--vino-suave); color:#fff; font-size:.62rem; min-width:16px; height:16px; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:0 4px;}
+.acordeon-head .chev{transition:transform .2s; color:var(--oro); font-size:.7rem; flex:0 0 auto;}
+.acordeon.open .acordeon-head .chev{transform:rotate(180deg);}
+.acordeon-body{max-height:0; overflow:hidden; transition:max-height .28s ease;}
+.acordeon.open .acordeon-body{max-height:2400px;}
+.acordeon-body-inner{padding:2px 14px 14px; border-top:1px solid var(--linea);}
+
+/* ---------------- RIEL DE COMANDAS PENDIENTES ---------------- */
+.riel-wrap{margin-bottom:22px; position:relative;}
+.riel-titulo{display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; flex-wrap:wrap; gap:8px;}
+.riel-titulo span{font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; color:var(--concreto);}
+.riel-titulo .cuenta{font-family:'IBM Plex Mono',monospace; font-size:.68rem; color:var(--oro-suave); letter-spacing:normal; text-transform:none;}
+.riel-barra{height:8px; border-radius:3px; margin:10px 0 0; background:linear-gradient(180deg,#8b8b8b,#5a5a5a 45%,#3a3a3a); box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.25);}
+.riel-track{display:flex; gap:16px; overflow-x:auto; padding:8px 6px 20px; margin-top:-3px; scrollbar-width:thin; -webkit-mask-image:linear-gradient(to right, transparent 0, black 14px, black calc(100% - 14px), transparent 100%); transition:gap .2s;}
+.riel-vacio{padding:30px 10px 24px; text-align:center; color:var(--concreto); font-size:.85rem;}
+.riel-vacio.hidden{display:none;}
+
+.comanda{flex:0 0 auto; width:150px; position:relative; padding-top:12px; animation:balanceo 4.5s ease-in-out infinite; transition:width .2s;}
+.comanda:nth-child(2n){animation-duration:5.2s;}
+.comanda:nth-child(3n){animation-duration:3.9s; animation-delay:.4s;}
+.comanda:hover{animation-play-state:paused; transform:rotate(0deg) !important;}
+@keyframes balanceo{
+  0%,100%{transform:rotate(var(--tilt,-2deg));}
+  50%{transform:rotate(calc(var(--tilt,-2deg) * -1));}
+}
+@keyframes caerYAsentar{
+  0%{ transform:scale(.4) translateY(-14px) rotate(-18deg); opacity:0; }
+  55%{ transform:scale(1.06) translateY(1px) rotate(var(--tilt,0deg)); opacity:1; }
+  100%{ transform:scale(1) translateY(0) rotate(var(--tilt,0deg)); opacity:1; }
+}
+@keyframes rasgarPapel{
+  0%{ transform:scale(1,1) rotate(var(--tilt,0deg)); opacity:1; }
+  25%{ transform:scale(1.08,.97) rotate(calc(var(--tilt,0deg) - 5deg)); }
+  100%{ transform:scale(.04,.85) rotate(9deg); opacity:0; }
+}
+.comanda.rasgando{animation:rasgarPapel .4s ease forwards !important;}
+.pinza{position:absolute; top:0; left:50%; transform:translateX(-50%); width:14px; height:14px; z-index:2;}
+.pinza::before{content:''; position:absolute; inset:0; background:linear-gradient(160deg,#c9c9c9,#8a8a8a 55%,#5c5c5c); border-radius:3px; box-shadow:0 2px 3px rgba(0,0,0,.5);}
+.papel{background:linear-gradient(180deg,var(--oro-suave),#dcc07f); border-radius:2px 2px 6px 6px; padding:13px 12px 10px; box-shadow:0 8px 14px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.3) inset; position:relative; color:#2a2115;}
+.papel::before{content:''; position:absolute; left:0; right:0; top:0; height:9px; background-image:repeating-linear-gradient(90deg, transparent 0 6px, rgba(21,18,14,.12) 6px 8px); background-position:0 -2px;}
+.papel .mesa-tag{font-family:'Fraunces',serif; font-weight:700; font-size:.86rem; margin-bottom:5px; padding-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.papel .items{font-size:.68rem; line-height:1.4; color:#3a2f1c; margin-bottom:8px;}
+.papel .total-row{display:flex; justify-content:space-between; align-items:baseline; border-top:1px dashed rgba(42,33,21,.35); padding-top:7px; margin-bottom:8px;}
+.papel .total-row .lbl{font-size:.58rem; letter-spacing:.07em; text-transform:uppercase; color:#5c4b2e;}
+.papel .total-row .val{font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:.84rem; color:#231b0f;}
+.papel .acciones-comanda{display:grid; grid-template-columns:1fr 1fr; gap:4px;}
+.papel .acciones-comanda button{background:rgba(21,18,14,.08); border:1px solid rgba(21,18,14,.22); border-radius:5px; padding:5px 3px; font-size:.63rem; font-weight:600; letter-spacing:.01em; color:#2a2115; transition:background .15s;}
+.papel .acciones-comanda button:hover{background:rgba(21,18,14,.18);}
+.papel .acciones-comanda button.cobrar{grid-column:1/3; background:var(--salvia); color:#fff; border-color:var(--salvia);}
+.papel .acciones-comanda button.cobrar:hover{background:#5f7a54;}
+.papel .acciones-comanda .corta{display:none;}
+
+.riel-track.densidad-compacta{gap:11px;}
+.riel-track.densidad-compacta .comanda{width:122px;}
+.riel-track.densidad-compacta .papel{padding:10px 9px 8px;}
+.riel-track.densidad-compacta .mesa-tag{font-size:.78rem; margin-bottom:3px;}
+.riel-track.densidad-compacta .items{font-size:.6rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:6px;}
+.riel-track.densidad-compacta .total-row{padding-top:5px; margin-bottom:6px;}
+.riel-track.densidad-compacta .total-row .val{font-size:.76rem;}
+.riel-track.densidad-compacta .acciones-comanda button{font-size:.58rem; padding:4px 2px;}
+
+.riel-track.densidad-mini{gap:8px;}
+.riel-track.densidad-mini .comanda{width:96px;}
+.riel-track.densidad-mini .papel{padding:8px 7px 7px;}
+.riel-track.densidad-mini .mesa-tag{font-size:.72rem; margin-bottom:2px;}
+.riel-track.densidad-mini .items{display:none;}
+.riel-track.densidad-mini .total-row{padding-top:4px; margin-bottom:5px;}
+.riel-track.densidad-mini .total-row .lbl{display:none;}
+.riel-track.densidad-mini .total-row .val{font-size:.72rem;}
+.riel-track.densidad-mini .acciones-comanda{gap:3px;}
+.riel-track.densidad-mini .acciones-comanda button{padding:4px 0; font-size:.6rem;}
+.riel-track.densidad-mini .acciones-comanda .full{display:none;}
+.riel-track.densidad-mini .acciones-comanda .corta{display:inline;}
+.riel-track.densidad-mini .acciones-comanda button.cobrar .full{display:inline;}
+
 /* ---------------- DIVIDIR CUENTA ---------------- */
 .modal-sub{font-size:.78rem; color:var(--concreto); margin-bottom:18px;}
 .modo-toggle{display:flex; background:var(--panel-2); border:1px solid var(--linea); border-radius:10px; padding:4px; margin-bottom:20px;}
@@ -429,29 +528,20 @@ textarea{resize:vertical; min-height:56px;}
 
     <div id="caja-abierta-box" class="hidden">
       <div class="eyebrow">Punto de venta</div>
-      <h2 class="titulo-vista">Tomar pedido</h2>
+      <h2 class="titulo-vista">Tomar pedido<button class="hamburguesa" id="btn-hamburguesa" onclick="toggleSidebarCaja()" aria-label="Abrir panel de caja"><span class="linea"></span><span class="linea"></span><span class="linea"></span></button></h2>
       <div class="cajero-linea">Atiende: <b id="cajero-actual">—</b> <button onclick="cambiarCajero()">Cambiar</button></div>
       <div id="banner-agregar-pendiente" class="hidden" style="background:rgba(211,162,78,.14); border:1px solid var(--linea-fuerte); border-radius:12px; padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
         <span style="font-size:.86rem;">Agregando productos a <b id="banner-agregar-mesa" style="color:var(--oro-suave);"></b> · elige abajo solo lo nuevo</span>
         <button class="btn btn-outline btn-sm" onclick="vaciarPedido()">Cancelar</button>
       </div>
-      <div class="card" style="margin-bottom:18px;">
-        <h3>Turnos de hoy</h3>
-        <div id="turnos-hoy-lista"></div>
+
+      <div class="riel-wrap">
+        <div class="riel-titulo"><span>Pedidos pendientes de pago</span><span class="cuenta" id="riel-contador">0 comandas</span></div>
+        <div class="riel-barra"></div>
+        <div class="riel-track" id="pedidos-pendientes-lista"></div>
+        <div class="riel-vacio hidden" id="riel-vacio">No hay cuentas pendientes de pago</div>
       </div>
-      <div class="card" style="margin-bottom:18px;">
-        <h3>Plano de mesas</h3>
-        <div style="display:flex; gap:16px; margin-bottom:14px; font-size:.74rem; color:var(--concreto); flex-wrap:wrap;">
-          <span><span class="mesa-dot" style="background:var(--concreto);"></span>Libre</span>
-          <span><span class="mesa-dot" style="background:var(--vino-suave);"></span>Ocupada</span>
-          <span><span class="mesa-dot" style="background:var(--oro);"></span>Reservada ahora</span>
-        </div>
-        <div class="mesas-grid" id="mesas-grid"></div>
-      </div>
-      <div class="card" style="margin-bottom:18px;">
-        <h3>Pedidos pendientes de pago <span class="ver-todo" id="pendientes-count">0</span></h3>
-        <div id="pedidos-pendientes-lista"></div>
-      </div>
+
       <div id="caja-alerta-stock"></div>
 
       <div class="caja-layout">
@@ -735,6 +825,43 @@ textarea{resize:vertical; min-height:56px;}
 
 </main>
 
+<div class="caja-sidebar-backdrop" id="sidebar-caja-backdrop" onclick="toggleSidebarCaja()"></div>
+<div class="caja-sidebar" id="sidebar-caja">
+  <div class="caja-sidebar-head">
+    <h3>Panel de caja</h3>
+    <button onclick="toggleSidebarCaja()">✕</button>
+  </div>
+
+  <div class="acordeon">
+    <button class="acordeon-head" onclick="toggleAcordeonCaja(this)">
+      <span class="lado-izq"><span class="ico">👤</span>Turnos de hoy</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="acordeon-body">
+      <div class="acordeon-body-inner">
+        <div id="turnos-hoy-lista"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="acordeon">
+    <button class="acordeon-head" onclick="toggleAcordeonCaja(this)">
+      <span class="lado-izq"><span class="ico">▦</span>Plano de mesas</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="acordeon-body">
+      <div class="acordeon-body-inner">
+        <div style="display:flex; gap:16px; margin:10px 0 14px; font-size:.74rem; color:var(--concreto); flex-wrap:wrap;">
+          <span><span class="mesa-dot" style="background:var(--concreto);"></span>Libre</span>
+          <span><span class="mesa-dot" style="background:var(--vino-suave);"></span>Ocupada</span>
+          <span><span class="mesa-dot" style="background:var(--oro);"></span>Reservada ahora</span>
+        </div>
+        <div class="mesas-grid" id="mesas-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="modal-root"></div>
 
@@ -1006,6 +1133,18 @@ function cambiarVista(v){
 }
 function renderTodo(){ renderResumen(); renderCaja(); renderProductos(); renderInventario(); renderReservas(); renderEstadisticas(); actualizarBadgeInventario(); }
 
+function toggleSidebarCaja(){
+  document.getElementById('sidebar-caja').classList.toggle('show');
+  document.getElementById('sidebar-caja-backdrop').classList.toggle('show');
+  document.getElementById('btn-hamburguesa').classList.toggle('open');
+}
+function toggleAcordeonCaja(headBtn){
+  const ac = headBtn.closest('.acordeon');
+  const yaAbierto = ac.classList.contains('open');
+  ac.parentElement.querySelectorAll('.acordeon').forEach(a=>a.classList.remove('open'));
+  if(!yaAbierto) ac.classList.add('open');
+}
+
 function tickReloj(){
   const d = new Date();
   document.getElementById('reloj').querySelector('strong').textContent = d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
@@ -1160,16 +1299,33 @@ function elegirMesaDesdeGrid(n){
   mostrarToast('Mesa ' + n + ' seleccionada para el pedido actual');
 }
 function pedidosPendientes(){ return CAJA.ventas.filter(v=>v.estado==='pendiente').sort((a,b)=>a.ts-b.ts); }
+function tiltComanda(i){ const t=[-3,2.5,-1.5,3,-2,1.5,-3.5,2]; return t[i%t.length]; }
 function renderPedidosPendientes(){
   const cont = document.getElementById('pedidos-pendientes-lista');
   if(!cont) return;
   const pendientes = pedidosPendientes();
-  document.getElementById('pendientes-count').textContent = pendientes.length;
-  cont.innerHTML = pendientes.length ? pendientes.map(v=>`
-    <div class="fila-simple">
-      <span class="n">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'} · ${resumenItems(v.items)}${v.nota?' · '+v.nota:''}</span>
-      <span class="p">${fmt(v.total)} <button class="link-btn" style="margin-left:8px;" onclick="abrirModalDetallePendiente('${v.id}')">Ver</button> <button class="link-btn" style="margin-left:8px;" onclick="iniciarAgregarAPendiente('${v.id}')">+ Agregar</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalDividir('${v.id}')">Dividir</button> <button class="link-btn" style="margin-left:8px;" onclick="abrirModalCobroPendiente('${v.id}')">Cobrar</button></span>
-    </div>`).join('') : '<div class="vacio">No hay cuentas pendientes de pago</div>';
+  cont.classList.remove('densidad-compacta','densidad-mini');
+  if(pendientes.length>=8) cont.classList.add('densidad-mini');
+  else if(pendientes.length>=5) cont.classList.add('densidad-compacta');
+  const contador = document.getElementById('riel-contador');
+  if(contador) contador.textContent = pendientes.length + (pendientes.length===1?' comanda':' comandas');
+  const vacio = document.getElementById('riel-vacio');
+  if(vacio) vacio.classList.toggle('hidden', pendientes.length>0);
+  cont.innerHTML = pendientes.map((v,i)=>`
+    <div class="comanda" style="--tilt:${tiltComanda(i)}deg;">
+      <div class="pinza"></div>
+      <div class="papel">
+        <div class="mesa-tag">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'}</div>
+        <div class="items">${v.nota ? v.nota+' · ' : ''}${resumenItems(v.items)}</div>
+        <div class="total-row"><span class="lbl">Total</span><span class="val">${fmt(v.total)}</span></div>
+        <div class="acciones-comanda">
+          <button onclick="abrirModalDetallePendiente('${v.id}')"><span class="full">Ver</span><span class="corta">V</span></button>
+          <button onclick="iniciarAgregarAPendiente('${v.id}')"><span class="full">+ Agregar</span><span class="corta">+</span></button>
+          <button onclick="abrirModalDividir('${v.id}')"><span class="full">Dividir</span><span class="corta">÷</span></button>
+          <button class="cobrar" onclick="abrirModalCobroPendiente('${v.id}')"><span class="full">Cobrar</span></button>
+        </div>
+      </div>
+    </div>`).join('');
 }
 let pendienteCobroActual = null;
 function abrirModalCobroPendiente(id){
