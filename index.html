@@ -288,6 +288,37 @@ textarea{resize:vertical; min-height:56px;}
 .receta-row button{color:var(--vino-suave); font-size:1rem;}
 .receta-unidad{font-size:.7rem; color:var(--concreto); grid-column:1/3; margin-top:-4px; margin-bottom:2px;}
 
+/* ---------------- DIVIDIR CUENTA ---------------- */
+.modal-sub{font-size:.78rem; color:var(--concreto); margin-bottom:18px;}
+.modo-toggle{display:flex; background:var(--panel-2); border:1px solid var(--linea); border-radius:10px; padding:4px; margin-bottom:20px;}
+.modo-toggle button{flex:1; padding:9px; font-size:.8rem; border-radius:7px; color:var(--concreto); transition:.15s;}
+.modo-toggle button.active{background:var(--oro); color:var(--hierro); font-weight:600;}
+.stepper-row{display:flex; align-items:center; justify-content:center; gap:20px; margin:22px 0;}
+.stepper-row button{width:44px; height:44px; border-radius:50%; border:1px solid var(--linea-fuerte); font-size:1.3rem; display:flex; align-items:center; justify-content:center;}
+.stepper-row button:active{background:var(--oro); color:var(--hierro);}
+.stepper-row .n{font-family:'IBM Plex Mono',monospace; font-size:1.6rem; min-width:36px; text-align:center;}
+.stepper-label{text-align:center; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--concreto);}
+.igual-total{text-align:center; padding:18px; background:var(--panel-2); border-radius:12px; margin-top:10px;}
+.igual-total .cada{font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;}
+.igual-total .val{font-family:'IBM Plex Mono',monospace; font-size:1.7rem; color:var(--oro-suave); font-weight:600;}
+.cuentas-tabs{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;}
+.cuentas-tabs button{padding:7px 14px; border-radius:20px; font-size:.78rem; border:1.5px solid var(--linea-fuerte); display:flex; align-items:center; gap:6px;}
+.cuentas-tabs button .dot{width:8px; height:8px; border-radius:50%;}
+.cuentas-tabs button.active{background:var(--panel-2); font-weight:600;}
+.cuentas-tabs .add-cuenta{border-style:dashed; color:var(--oro);}
+.prod-row{margin-bottom:14px;}
+.prod-row .head{display:flex; justify-content:space-between; font-size:.84rem; margin-bottom:8px;}
+.prod-row .head .nom{color:var(--crema);}
+.prod-row .head .pr{font-size:.78rem; color:var(--concreto);}
+.bolitas{display:flex; gap:8px; flex-wrap:wrap;}
+.bolita{width:34px; height:34px; border-radius:50%; border:2px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-size:.7rem; color:var(--concreto); transition:.15s; font-family:'IBM Plex Mono',monospace;}
+.bolita:active{transform:scale(.92);}
+.totales-cuentas{display:flex; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid var(--linea); flex-wrap:wrap;}
+.totales-cuentas .item{flex:1; min-width:100px; background:var(--panel-2); border-radius:10px; padding:10px 12px;}
+.totales-cuentas .item .lbl{font-size:.68rem; color:var(--concreto); display:flex; align-items:center; gap:5px; margin-bottom:3px;}
+.totales-cuentas .item .lbl .dot{width:7px; height:7px; border-radius:50%;}
+.totales-cuentas .item .val{font-size:.92rem; color:var(--oro-suave);}
+
 ::-webkit-scrollbar{width:8px; height:8px;}
 ::-webkit-scrollbar-thumb{background:var(--linea-fuerte); border-radius:10px;}
 
@@ -1530,74 +1561,118 @@ function abrirModalDividir(id){
   const totalUnidades = v.items.reduce((a,i)=>a+i.cantidad,0);
   if(totalUnidades < 2){ mostrarToast('Se necesitan al menos 2 productos en la cuenta para dividirla'); return; }
   divisionState = {
-    ventaId: id, numPartes: 2,
-    items: v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidadTotal: it.cantidad, partes: repartirParejo(it.cantidad, 2) }))
+    ventaId: id, modo: 'igual', nPersonas: 2, cuentas: [1,2], cuentaActiva: 1,
+    itemsFlat: v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, unidades: Array(it.cantidad).fill(1) }))
   };
   renderModalDividir();
 }
-function cambiarNumPartes(n){
-  divisionState.numPartes = n;
-  divisionState.items.forEach(it=>{ it.partes = repartirParejo(it.cantidadTotal, n); });
+function setModoDividir(m){ divisionState.modo = m; renderModalDividir(); }
+function cambiarNPersonas(delta){
+  divisionState.nPersonas = Math.max(2, Math.min(8, divisionState.nPersonas + delta));
   renderModalDividir();
 }
-function actualizarParte(itemIdx, parteIdx, val){
-  const cant = Math.max(0, parseInt(val)||0);
-  divisionState.items[itemIdx].partes[parteIdx] = cant;
+function agregarCuentaDividir(){
+  const nuevo = Math.max(...divisionState.cuentas) + 1;
+  divisionState.cuentas.push(nuevo);
+  divisionState.cuentaActiva = nuevo;
   renderModalDividir();
 }
+function setCuentaActivaDividir(id){ divisionState.cuentaActiva = id; renderModalDividir(); }
+function asignarUnidadDividir(itemIdx, unidadIdx){
+  divisionState.itemsFlat[itemIdx].unidades[unidadIdx] = divisionState.cuentaActiva;
+  renderModalDividir();
+}
+const COLORES_DIVIDIR = ['#c65b5b','#5b7ea3','#6f8f63','#7d6a9e','#b98a3e','#4f9a94','#c98bbf','#8fa66b'];
+function colorCuentaDividir(id){ return COLORES_DIVIDIR[(id-1) % COLORES_DIVIDIR.length]; }
 function renderModalDividir(){
+  const v = CAJA.ventas.find(x=>x.id===divisionState.ventaId);
   const root = document.getElementById('modal-root');
-  const n = divisionState.numPartes;
-  const totalesPorParte = Array(n).fill(0);
-  let todoValido = true;
-  const filasHtml = divisionState.items.map((it, idx)=>{
-    const suma = it.partes.reduce((a,b)=>a+b,0);
-    const valido = suma === it.cantidadTotal;
-    if(!valido) todoValido = false;
-    it.partes.forEach((c,p)=>{ totalesPorParte[p] += c * it.precio; });
-    const inputs = it.partes.map((c,p)=>`<input type="number" min="0" class="mini-input" style="width:52px;" value="${c}" oninput="actualizarParte(${idx},${p},this.value)">`).join('');
-    return `<div style="display:grid; grid-template-columns:1.6fr repeat(${n},56px); gap:8px; align-items:center; margin-bottom:${valido?'8px':'2px'};">
-      <span style="font-size:.82rem;">${it.nombre} <span style="color:var(--concreto);">(${it.cantidadTotal})</span></span>
-      ${inputs}
-    </div>${!valido ? `<div style="color:var(--vino-suave); font-size:.7rem; margin-bottom:8px;">Asignado ${suma} de ${it.cantidadTotal}</div>` : ''}`;
-  }).join('');
-  const partesHeader = Array.from({length:n},(_,p)=>`<span style="font-size:.7rem; color:var(--concreto); text-align:center;">Cuenta ${p+1}</span>`).join('');
-  const totalesHtml = totalesPorParte.map(t=>`<span class="mono" style="font-size:.78rem; color:var(--oro-suave); text-align:center;">${fmt(t)}</span>`).join('');
+  const totalPedido = v.items.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  const resumenPedido = v.items.map(i=>`${i.cantidad}× ${i.nombre}`).join(' · ');
+  const esIgual = divisionState.modo === 'igual';
+
+  let bloque = '';
+  if(esIgual){
+    const n = divisionState.nPersonas;
+    bloque = `
+      <div class="stepper-label">¿Entre cuántas personas?</div>
+      <div class="stepper-row">
+        <button onclick="cambiarNPersonas(-1)">–</button>
+        <span class="n mono">${n}</span>
+        <button onclick="cambiarNPersonas(1)">+</button>
+      </div>
+      <div class="igual-total">
+        <div class="cada">Cada uno paga (aprox.)</div>
+        <div class="val">${fmt(totalPedido / n)}</div>
+      </div>`;
+  }else{
+    const cuentas = divisionState.cuentas;
+    const tabsHtml = cuentas.map(id=>`
+      <button class="${id===divisionState.cuentaActiva?'active':''}" onclick="setCuentaActivaDividir(${id})">
+        <span class="dot" style="background:${colorCuentaDividir(id)}"></span>Cuenta ${id}
+      </button>`).join('') + `<button class="add-cuenta" onclick="agregarCuentaDividir()">+ Cuenta</button>`;
+    const filasHtml = divisionState.itemsFlat.map((it,pIdx)=>{
+      const bolitas = it.unidades.map((asig,uIdx)=>{
+        const color = asig ? colorCuentaDividir(asig) : null;
+        return `<button class="bolita" style="${color?`background:${color}; border-color:${color}; color:#fff;`:''}" onclick="asignarUnidadDividir(${pIdx},${uIdx})">${asig?'✓':''}</button>`;
+      }).join('');
+      return `<div class="prod-row">
+        <div class="head"><span class="nom">${it.nombre} (${it.unidades.length})</span><span class="pr mono">${fmt(it.precio)} c/u</span></div>
+        <div class="bolitas">${bolitas}</div>
+      </div>`;
+    }).join('');
+    const totalesHtml = cuentas.map(id=>{
+      let total = 0;
+      divisionState.itemsFlat.forEach(it=>{ it.unidades.forEach(a=>{ if(a===id) total += it.precio; }); });
+      return `<div class="item"><div class="lbl"><span class="dot" style="background:${colorCuentaDividir(id)}"></span>Cuenta ${id}</div><div class="val mono">${fmt(total)}</div></div>`;
+    }).join('');
+    bloque = `<div class="cuentas-tabs">${tabsHtml}</div><div id="prod-rows">${filasHtml}</div><div class="totales-cuentas">${totalesHtml}</div>`;
+  }
+
+  const cuentasConItems = esIgual ? divisionState.nPersonas : new Set(divisionState.itemsFlat.flatMap(it=>it.unidades).filter(Boolean)).size;
+  const todoAsignado = esIgual || divisionState.itemsFlat.every(it=>it.unidades.every(a=>a));
+  const puedeConfirmar = todoAsignado && cuentasConItems >= 2;
+
   root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
-    <h3>Dividir cuenta</h3>
-    <div class="campo">
-      <label>¿En cuántas cuentas?</label>
-      <select onchange="cambiarNumPartes(parseInt(this.value))">
-        ${[2,3,4,5,6].map(x=>`<option value="${x}" ${x===n?'selected':''}>${x}</option>`).join('')}
-      </select>
+    <h3>Dividir cuenta ${v.mesa?'· Mesa '+v.mesa:''}</h3>
+    <div class="modal-sub">${resumenPedido} · Total ${fmt(totalPedido)}</div>
+    <div class="modo-toggle">
+      <button class="${esIgual?'active':''}" onclick="setModoDividir('igual')">Partes iguales</button>
+      <button class="${!esIgual?'active':''}" onclick="setModoDividir('prod')">Por producto</button>
     </div>
-    <div style="display:grid; grid-template-columns:1.6fr repeat(${n},56px); gap:8px; margin-bottom:8px;">
-      <span></span>${partesHeader}
-    </div>
-    ${filasHtml}
-    <div style="display:grid; grid-template-columns:1.6fr repeat(${n},56px); gap:8px; margin-top:6px; padding-top:10px; border-top:1px solid var(--linea-fuerte);">
-      <span style="font-size:.78rem; color:var(--concreto);">Subtotal</span>${totalesHtml}
-    </div>
+    ${bloque}
     <div class="modal-actions" style="margin-top:18px;">
       <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
-      <button class="btn btn-oro" ${todoValido?'':'disabled'} onclick="confirmarDivision()">Confirmar división</button>
+      <button class="btn btn-oro" ${puedeConfirmar?'':'disabled'} onclick="confirmarDivision()">Confirmar división</button>
     </div>
   </div></div>`;
 }
 async function confirmarDivision(){
   const v = CAJA.ventas.find(x=>x.id===divisionState.ventaId);
   if(!v) return;
-  const n = divisionState.numPartes;
   const nuevasVentas = [];
-  for(let p=0; p<n; p++){
-    const itemsParte = divisionState.items.filter(it=>it.partes[p]>0).map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.partes[p] }));
-    if(!itemsParte.length) continue;
-    const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
-    nuevasVentas.push({
-      id: uid('v'), ts: Date.now(), fecha: v.fecha, hora: ahoraStr(), items: itemsParte, subtotal, total: subtotal,
-      descuento: null, metodo:null, recibido:null, cambio:null, nota: v.nota, cerrada:false,
-      cajero: v.cajero, mesa: v.mesa, estado:'pendiente'
-    });
+  if(divisionState.modo === 'igual'){
+    const n = divisionState.nPersonas;
+    const itemsPorParte = v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, partes: repartirParejo(it.cantidad, n) }));
+    for(let p=0; p<n; p++){
+      const itemsParte = itemsPorParte.filter(it=>it.partes[p]>0).map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.partes[p] }));
+      if(!itemsParte.length) continue;
+      const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
+      nuevasVentas.push({ id: uid('v'), ts: Date.now(), fecha: v.fecha, hora: ahoraStr(), items: itemsParte, subtotal, total: subtotal,
+        descuento: null, metodo:null, recibido:null, cambio:null, nota: v.nota, cerrada:false, cajero: v.cajero, mesa: v.mesa, estado:'pendiente' });
+    }
+  }else{
+    for(const id of divisionState.cuentas){
+      const itemsParte = [];
+      divisionState.itemsFlat.forEach(it=>{
+        const cant = it.unidades.filter(a=>a===id).length;
+        if(cant>0) itemsParte.push({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: cant });
+      });
+      if(!itemsParte.length) continue;
+      const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
+      nuevasVentas.push({ id: uid('v'), ts: Date.now(), fecha: v.fecha, hora: ahoraStr(), items: itemsParte, subtotal, total: subtotal,
+        descuento: null, metodo:null, recibido:null, cambio:null, nota: v.nota, cerrada:false, cajero: v.cajero, mesa: v.mesa, estado:'pendiente' });
+    }
   }
   if(nuevasVentas.length < 2){ mostrarToast('La división debe generar al menos 2 cuentas con productos'); return; }
   try{
