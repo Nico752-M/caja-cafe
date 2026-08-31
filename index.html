@@ -571,7 +571,7 @@ textarea{resize:vertical; min-height:56px;}
           <div id="servicio-linea" class="hidden" style="display:flex; justify-content:space-between; font-size:.82rem; color:var(--salvia-suave); margin:6px 0;">
             <span id="servicio-label">Servicio</span><span id="servicio-valor" class="mono">+$0</span>
           </div>
-          <button type="button" class="link-btn" id="btn-toggle-servicio" onclick="toggleServicioForm()">+ Propina / servicio</button>
+          <button type="button" class="link-btn" id="btn-toggle-servicio" onclick="toggleServicioForm()">+ Propina</button>
           <div id="servicio-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
             <select id="serv-valor" onchange="if(this.value!=='otro') document.getElementById('serv-otro').classList.add('hidden'); else document.getElementById('serv-otro').classList.remove('hidden');">
               <option value="10">10%</option><option value="12">12%</option><option value="15">15%</option><option value="otro">Otro %</option>
@@ -627,27 +627,14 @@ textarea{resize:vertical; min-height:56px;}
         </div>
       </div>
 
-      <div class="seccion-caja-baja">
-        <div class="card">
-          <h3 id="hist-titulo">Ventas de hoy <span class="ver-todo" id="hist-count">0 ventas</span></h3>
-          <div style="margin-bottom:12px;"><input type="date" id="hist-fecha" onchange="renderHistorialVentas()" style="max-width:180px;"></div>
-          <div class="inv-tabla-wrap">
-            <table class="hist-tabla" id="tabla-ventas">
-              <thead><tr><th>Hora</th><th>Mesa</th><th>Detalle</th><th>Método</th><th>Total</th><th></th></tr></thead>
-              <tbody id="tabla-ventas-body"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="card cierre-box">
-          <h3>Cierre de caja</h3>
-          <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono" id="cierre-apertura">$0</span></div>
-          <div class="fila-simple"><span class="n">Ventas efectivo</span><span class="p mono" id="cierre-efectivo">$0</span></div>
-          <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono" id="cierre-esperado">$0</span></div>
-          <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-top:12px;">Efectivo contado</label>
-          <input type="number" id="input-contado" placeholder="Cuenta el cajón" inputmode="numeric" oninput="calcularDiferencia()">
-          <div id="diferencia-box"></div>
-          <button class="btn btn-vino btn-block" onclick="confirmarCierre()">Cerrar caja del día</button>
+      <div class="card">
+        <h3 id="hist-titulo">Ventas de hoy <span class="ver-todo" id="hist-count">0 ventas</span></h3>
+        <div style="margin-bottom:12px;"><input type="date" id="hist-fecha" onchange="renderHistorialVentas()" style="max-width:180px;"></div>
+        <div class="inv-tabla-wrap">
+          <table class="hist-tabla" id="tabla-ventas">
+            <thead><tr><th>Hora</th><th>Mesa</th><th>Detalle</th><th>Método</th><th>Total</th><th></th></tr></thead>
+            <tbody id="tabla-ventas-body"></tbody>
+          </table>
         </div>
       </div>
 
@@ -857,6 +844,24 @@ textarea{resize:vertical; min-height:56px;}
           <span><span class="mesa-dot" style="background:var(--oro);"></span>Reservada ahora</span>
         </div>
         <div class="mesas-grid" id="mesas-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="acordeon">
+    <button class="acordeon-head" onclick="toggleAcordeonCaja(this)">
+      <span class="lado-izq"><span class="ico">💰</span>Cierre de caja</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="acordeon-body">
+      <div class="acordeon-body-inner cierre-box">
+        <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono" id="cierre-apertura">$0</span></div>
+        <div class="fila-simple"><span class="n">Ventas efectivo</span><span class="p mono" id="cierre-efectivo">$0</span></div>
+        <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono" id="cierre-esperado">$0</span></div>
+        <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin:12px 0 6px;">Efectivo contado</label>
+        <input type="number" id="input-contado" placeholder="Cuenta el cajón" inputmode="numeric" oninput="calcularDiferencia()">
+        <div id="diferencia-box"></div>
+        <button class="btn btn-vino btn-block" onclick="confirmarCierre()">Cerrar caja del día</button>
       </div>
     </div>
   </div>
@@ -1072,6 +1077,7 @@ async function cargarDatos(){
         metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
         nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
         estado: v.estado || 'pagada',
+        servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
         items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) }))
       })),
       cierres: cierresRows.map(c=>{
@@ -1391,6 +1397,7 @@ async function confirmarCobroPendiente(){
       id:v.id, fecha:aOracleFecha(fechaCobro), hora:horaCobro, ts:tsCobro, subtotal:v.subtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
+      servicio_porcentaje: v.servicioPorcentaje, servicio_monto: v.servicioMonto||0,
       total:v.total, metodo, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada'
     });
     v.fecha = fechaCobro; v.hora = horaCobro; v.ts = tsCobro;
@@ -1404,7 +1411,10 @@ async function confirmarCobroPendiente(){
 function abrirModalDetallePendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
-  detalleEditTemp = { ventaId: id, items: v.items.map(it=>({...it})), nota: v.nota || '', mesa: v.mesa || '' };
+  detalleEditTemp = { ventaId: id, items: v.items.map(it=>({...it})), nota: v.nota || '', mesa: v.mesa || '',
+    descuento: v.descuento ? { ...v.descuento } : { tipo:'ninguno', valor:0, motivo:'' },
+    servicio: { activo: !!(v.servicioPorcentaje>0), porcentaje: v.servicioPorcentaje || 0 }
+  };
   renderModalDetallePendiente();
 }
 function cambiarCantidadDetalle(idx, delta){
@@ -1413,10 +1423,53 @@ function cambiarCantidadDetalle(idx, delta){
   if(it.cantidad<=0) detalleEditTemp.items.splice(idx,1);
   renderModalDetallePendiente();
 }
+function pendCalcularMontoDescuento(subtotal){
+  const d = detalleEditTemp.descuento;
+  if(!d || d.tipo==='ninguno') return 0;
+  if(d.tipo==='cortesia') return subtotal;
+  if(d.tipo==='porcentaje') return Math.min(subtotal, subtotal*d.valor/100);
+  if(d.tipo==='valor') return Math.min(subtotal, d.valor);
+  return 0;
+}
+function pendCalcularMontoServicio(base){
+  if(!detalleEditTemp.servicio.activo) return 0;
+  return Math.round(base * detalleEditTemp.servicio.porcentaje/100);
+}
+function pendToggleDescuentoForm(){ document.getElementById('pend-descuento-form').classList.toggle('hidden'); }
+function pendAplicarDescuento(){
+  const tipo = document.getElementById('pend-desc-tipo').value;
+  const valor = parseFloat(document.getElementById('pend-desc-valor').value)||0;
+  const motivo = document.getElementById('pend-desc-motivo').value.trim();
+  if(tipo!=='cortesia' && valor<=0){ mostrarToast('Ingresa un valor de descuento válido'); return; }
+  if(!motivo){ mostrarToast('Escribe un motivo (ej: cliente frecuente, error de cocina)'); return; }
+  detalleEditTemp.descuento = { tipo, valor: tipo==='cortesia' ? 100 : valor, motivo };
+  renderModalDetallePendiente();
+}
+function pendQuitarDescuento(){
+  detalleEditTemp.descuento = { tipo:'ninguno', valor:0, motivo:'' };
+  renderModalDetallePendiente();
+}
+function pendToggleServicioForm(){ document.getElementById('pend-servicio-form').classList.toggle('hidden'); }
+function pendAplicarServicio(){
+  const sel = document.getElementById('pend-serv-valor').value;
+  const porcentaje = sel==='otro' ? (parseFloat(document.getElementById('pend-serv-otro').value)||0) : parseFloat(sel);
+  if(porcentaje<=0){ mostrarToast('Ingresa un porcentaje de propina válido'); return; }
+  detalleEditTemp.servicio = { activo:true, porcentaje };
+  renderModalDetallePendiente();
+}
+function pendQuitarServicio(){
+  detalleEditTemp.servicio = { activo:false, porcentaje:0 };
+  renderModalDetallePendiente();
+}
 function renderModalDetallePendiente(){
   const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
   const root = document.getElementById('modal-root');
-  const total = detalleEditTemp.items.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  const subtotal = detalleEditTemp.items.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  const montoDesc = pendCalcularMontoDescuento(subtotal);
+  const baseConDesc = Math.max(0, subtotal - montoDesc);
+  const montoServ = pendCalcularMontoServicio(baseConDesc);
+  const total = baseConDesc + montoServ;
+  const d = detalleEditTemp.descuento, s = detalleEditTemp.servicio;
   const mesaOpts = ['<option value="">Sin mesa / para llevar</option>'].concat(
     Array.from({length:15},(_,i)=>i+1).map(n=>`<option value="${n}" ${String(detalleEditTemp.mesa)===String(n)?'selected':''}>Mesa ${n}</option>`)
   ).join('');
@@ -1434,7 +1487,27 @@ function renderModalDetallePendiente(){
         <div class="ri-precio">${fmt(i.precio*i.cantidad)}</div>
       </div>`).join('') : '<div class="vacio">Sin productos</div>'}
     </div>
-    <div class="fila-simple" style="font-weight:600;"><span class="n">Total</span><span class="p">${fmt(total)}</span></div>
+    <div class="fila-simple"><span class="n">Subtotal</span><span class="p">${fmt(subtotal)}</span></div>
+    ${montoDesc>0 ? `<div class="fila-simple"><span class="n" style="color:var(--vino-suave);">${d.tipo==='cortesia'?'Cortesía':'Descuento'} (${d.motivo})</span><span class="p" style="color:var(--vino-suave);">-${fmt(montoDesc)}</span></div>` : ''}
+    <button type="button" class="link-btn" onclick="pendToggleDescuentoForm()">${montoDesc>0?'Editar descuento / cortesía':'+ Descuento / cortesía'}</button>
+    <div id="pend-descuento-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <select id="pend-desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
+      <input type="number" id="pend-desc-valor" placeholder="Ej: 10">
+      <input type="text" id="pend-desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
+      <button type="button" class="btn btn-oro btn-sm" onclick="pendAplicarDescuento()">Aplicar</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pendQuitarDescuento()">Quitar</button>
+    </div>
+    ${montoServ>0 ? `<div class="fila-simple"><span class="n" style="color:var(--salvia-suave);">Propina ${s.porcentaje}%</span><span class="p" style="color:var(--salvia-suave);">+${fmt(montoServ)}</span></div>` : ''}
+    <button type="button" class="link-btn" onclick="pendToggleServicioForm()">${montoServ>0?'Editar propina':'+ Propina'}</button>
+    <div id="pend-servicio-form" class="hidden" style="margin:10px 0 14px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <select id="pend-serv-valor" onchange="if(this.value!=='otro') document.getElementById('pend-serv-otro').classList.add('hidden'); else document.getElementById('pend-serv-otro').classList.remove('hidden');">
+        <option value="10">10%</option><option value="12">12%</option><option value="15">15%</option><option value="otro">Otro %</option>
+      </select>
+      <input type="number" id="pend-serv-otro" placeholder="Ej: 8" class="hidden">
+      <button type="button" class="btn btn-oro btn-sm" onclick="pendAplicarServicio()">Aplicar</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="pendQuitarServicio()">Quitar</button>
+    </div>
+    <div class="fila-simple" style="font-weight:600; margin-top:6px;"><span class="n">Total</span><span class="p">${fmt(total)}</span></div>
     <div class="modal-actions" style="margin-top:16px; flex-wrap:wrap;">
       <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cerrar</button>
       <button class="btn btn-oro" onclick="guardarDetallePendiente()">Guardar cambios</button>
@@ -1470,6 +1543,14 @@ async function guardarDetallePendiente(){
   if(!nuevosItems.length){ mostrarToast('La cuenta debe tener al menos un producto'); return; }
   const nuevaNota = (detalleEditTemp.nota||'').trim();
   const nuevaMesa = detalleEditTemp.mesa ? parseInt(detalleEditTemp.mesa,10) : null;
+  const subtotal = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
+  const montoDesc = pendCalcularMontoDescuento(subtotal);
+  const baseConDesc = Math.max(0, subtotal - montoDesc);
+  const montoServ = pendCalcularMontoServicio(baseConDesc);
+  const nuevoTotal = baseConDesc + montoServ;
+  const desc = detalleEditTemp.descuento;
+  const descAGuardar = (desc && desc.tipo!=='ninguno' && montoDesc>0) ? { ...desc, monto: montoDesc } : null;
+  const serv = detalleEditTemp.servicio;
   try{
     await ajustarInventarioPorEdicion(v.items, nuevosItems);
     const filasExistentes = await itemsDeVenta(v.id);
@@ -1477,13 +1558,15 @@ async function guardarDetallePendiente(){
     for(const it of nuevosItems){
       await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
     }
-    const nuevoTotal = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
     await oUpdate('ventas', v.id, {
-      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoTotal,
-      descuento_tipo:null, descuento_valor:null, descuento_motivo:null, descuento_monto:0,
+      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal,
+      descuento_tipo: descAGuardar?descAGuardar.tipo:null, descuento_valor: descAGuardar?descAGuardar.valor:null,
+      descuento_motivo: descAGuardar?descAGuardar.motivo:null, descuento_monto: descAGuardar?descAGuardar.monto:0,
+      servicio_porcentaje: montoServ>0?serv.porcentaje:null, servicio_monto: montoServ,
       total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente'
     });
-    v.items = nuevosItems; v.subtotal = nuevoTotal; v.total = nuevoTotal; v.descuento = null; v.nota = nuevaNota; v.mesa = nuevaMesa;
+    v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
+    v.servicioPorcentaje = montoServ>0 ? serv.porcentaje : null; v.servicioMonto = montoServ;
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Pedido actualizado');
     renderCaja(); renderEstadisticas();
@@ -1719,10 +1802,10 @@ function toggleServicioForm(){ document.getElementById('servicio-form').classLis
 function aplicarServicio(){
   const sel = document.getElementById('serv-valor').value;
   const porcentaje = sel==='otro' ? (parseFloat(document.getElementById('serv-otro').value)||0) : parseFloat(sel);
-  if(porcentaje<=0){ mostrarToast('Ingresa un porcentaje de servicio válido'); return; }
+  if(porcentaje<=0){ mostrarToast('Ingresa un porcentaje de propina válido'); return; }
   servicioActual = { activo:true, porcentaje };
   document.getElementById('servicio-form').classList.add('hidden');
-  mostrarToast('Servicio aplicado');
+  mostrarToast('Propina aplicada');
   renderPedido();
 }
 function quitarServicio(){
@@ -1769,10 +1852,10 @@ function renderPedido(){
   const servLinea = document.getElementById('servicio-linea');
   if(montoServ > 0){
     servLinea.classList.remove('hidden');
-    document.getElementById('servicio-label').textContent = `Servicio ${servicioActual.porcentaje}%`;
+    document.getElementById('servicio-label').textContent = `Propina ${servicioActual.porcentaje}%`;
     document.getElementById('servicio-valor').textContent = '+' + fmt(montoServ);
   }else{ servLinea.classList.add('hidden'); }
-  document.getElementById('btn-toggle-servicio').textContent = montoServ>0 ? 'Editar propina / servicio' : '+ Propina / servicio';
+  document.getElementById('btn-toggle-servicio').textContent = montoServ>0 ? 'Editar propina' : '+ Propina';
 
   document.getElementById('recibo-total').textContent = fmt(total);
   calcularCambio();
@@ -1824,6 +1907,7 @@ function abrirModalDividir(id){
   if(totalUnidades < 2){ mostrarToast('Se necesitan al menos 2 productos en la cuenta para dividirla'); return; }
   divisionState = {
     ventaId: id, modo: 'igual', nPersonas: 2, cuentas: [1,2], cuentaActiva: 1,
+    nombresPartes: ['',''], nombresCuentas: {1:'',2:''},
     itemsFlat: v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, unidades: Array(it.cantidad).fill(1) }))
   };
   renderModalDividir();
@@ -1831,12 +1915,15 @@ function abrirModalDividir(id){
 function setModoDividir(m){ divisionState.modo = m; renderModalDividir(); }
 function cambiarNPersonas(delta){
   divisionState.nPersonas = Math.max(2, Math.min(8, divisionState.nPersonas + delta));
+  while(divisionState.nombresPartes.length < divisionState.nPersonas) divisionState.nombresPartes.push('');
+  divisionState.nombresPartes.length = divisionState.nPersonas;
   renderModalDividir();
 }
 function agregarCuentaDividir(){
   const nuevo = Math.max(...divisionState.cuentas) + 1;
   divisionState.cuentas.push(nuevo);
   divisionState.cuentaActiva = nuevo;
+  divisionState.nombresCuentas[nuevo] = '';
   renderModalDividir();
 }
 function setCuentaActivaDividir(id){ divisionState.cuentaActiva = id; renderModalDividir(); }
@@ -1866,6 +1953,10 @@ function renderModalDividir(){
       <div class="igual-total">
         <div class="cada">Cada uno paga (aprox.)</div>
         <div class="val">${fmt(totalPedido / n)}</div>
+      </div>
+      <label style="display:block; font-size:.7rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin:16px 0 8px;">Nombres (opcional)</label>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        ${Array.from({length:n}).map((_,i)=>`<input type="text" placeholder="Persona ${i+1}" value="${divisionState.nombresPartes[i]||''}" oninput="divisionState.nombresPartes[${i}]=this.value">`).join('')}
       </div>`;
   }else{
     const cuentas = divisionState.cuentas;
@@ -1873,6 +1964,9 @@ function renderModalDividir(){
       <button class="${id===divisionState.cuentaActiva?'active':''}" onclick="setCuentaActivaDividir(${id})">
         <span class="dot" style="background:${colorCuentaDividir(id)}"></span>Cuenta ${id}
       </button>`).join('') + `<button class="add-cuenta" onclick="agregarCuentaDividir()">+ Cuenta</button>`;
+    const nombresHtml = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-bottom:14px;">
+      ${cuentas.map(id=>`<input type="text" placeholder="Nombre Cuenta ${id} (opcional)" value="${divisionState.nombresCuentas[id]||''}" oninput="divisionState.nombresCuentas[${id}]=this.value">`).join('')}
+    </div>`;
     const filasHtml = divisionState.itemsFlat.map((it,pIdx)=>{
       const bolitas = it.unidades.map((asig,uIdx)=>{
         const color = asig ? colorCuentaDividir(asig) : null;
@@ -1888,7 +1982,7 @@ function renderModalDividir(){
       divisionState.itemsFlat.forEach(it=>{ it.unidades.forEach(a=>{ if(a===id) total += it.precio; }); });
       return `<div class="item"><div class="lbl"><span class="dot" style="background:${colorCuentaDividir(id)}"></span>Cuenta ${id}</div><div class="val mono">${fmt(total)}</div></div>`;
     }).join('');
-    bloque = `<div class="cuentas-tabs">${tabsHtml}</div><div id="prod-rows">${filasHtml}</div><div class="totales-cuentas">${totalesHtml}</div>`;
+    bloque = `<div class="cuentas-tabs">${tabsHtml}</div>${nombresHtml}<div id="prod-rows">${filasHtml}</div><div class="totales-cuentas">${totalesHtml}</div>`;
   }
 
   const cuentasConItems = esIgual ? divisionState.nPersonas : new Set(divisionState.itemsFlat.flatMap(it=>it.unidades).filter(Boolean)).size;
@@ -1920,8 +2014,9 @@ async function confirmarDivision(){
       const itemsParte = itemsPorParte.filter(it=>it.partes[p]>0).map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.partes[p] }));
       if(!itemsParte.length) continue;
       const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
+      const nombreParte = (divisionState.nombresPartes[p]||'').trim();
       nuevasVentas.push({ id: uid('v'), ts: Date.now(), fecha: v.fecha, hora: ahoraStr(), items: itemsParte, subtotal, total: subtotal,
-        descuento: null, metodo:null, recibido:null, cambio:null, nota: v.nota, cerrada:false, cajero: v.cajero, mesa: v.mesa, estado:'pendiente' });
+        descuento: null, metodo:null, recibido:null, cambio:null, nota: nombreParte || v.nota, cerrada:false, cajero: v.cajero, mesa: v.mesa, estado:'pendiente' });
     }
   }else{
     for(const id of divisionState.cuentas){
@@ -1932,8 +2027,9 @@ async function confirmarDivision(){
       });
       if(!itemsParte.length) continue;
       const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
+      const nombreCuenta = (divisionState.nombresCuentas[id]||'').trim();
       nuevasVentas.push({ id: uid('v'), ts: Date.now(), fecha: v.fecha, hora: ahoraStr(), items: itemsParte, subtotal, total: subtotal,
-        descuento: null, metodo:null, recibido:null, cambio:null, nota: v.nota, cerrada:false, cajero: v.cajero, mesa: v.mesa, estado:'pendiente' });
+        descuento: null, metodo:null, recibido:null, cambio:null, nota: nombreCuenta || v.nota, cerrada:false, cajero: v.cajero, mesa: v.mesa, estado:'pendiente' });
     }
   }
   if(nuevasVentas.length < 2){ mostrarToast('La división debe generar al menos 2 cuentas con productos'); return; }
@@ -2024,6 +2120,7 @@ async function dejarPendiente(){
       id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
       descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
       descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
+      servicio_porcentaje: venta.servicioPorcentaje, servicio_monto: venta.servicioMonto||0,
       total:venta.total, metodo:null, recibido:null, cambio:null, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pendiente'
     });
     for(const it of items){
@@ -2066,6 +2163,7 @@ async function cobrar(){
       id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
       descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
       descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
+      servicio_porcentaje: venta.servicioPorcentaje, servicio_monto: venta.servicioMonto||0,
       total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pagada'
     });
     for(const it of items){
