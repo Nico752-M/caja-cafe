@@ -373,6 +373,8 @@ textarea{resize:vertical; min-height:56px;}
 .papel .acciones-comanda button:hover{background:rgba(21,18,14,.18);}
 .papel .acciones-comanda button.cobrar{grid-column:1/3; background:var(--salvia); color:#fff; border-color:var(--salvia);}
 .papel .acciones-comanda button.cobrar:hover{background:#5f7a54;}
+.papel .acciones-comanda button.anular{color:var(--vino-suave); border-color:rgba(198,91,91,.4);}
+.papel .acciones-comanda button.anular:hover{background:rgba(198,91,91,.16);}
 .papel .acciones-comanda .corta{display:none;}
 
 .riel-track.densidad-compacta{gap:11px;}
@@ -850,6 +852,35 @@ textarea{resize:vertical; min-height:56px;}
 
   <div class="acordeon">
     <button class="acordeon-head" onclick="toggleAcordeonCaja(this)">
+      <span class="lado-izq"><span class="ico">🗑</span>Pedidos anulados<span class="badge hidden" id="badge-anulados">0</span></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="acordeon-body">
+      <div class="acordeon-body-inner">
+        <div id="anulados-lista"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="acordeon">
+    <button class="acordeon-head" onclick="toggleAcordeonCaja(this)">
+      <span class="lado-izq"><span class="ico">💵</span>Ingresos y egresos</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="acordeon-body">
+      <div class="acordeon-body-inner">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 14px;">
+          <button class="btn btn-outline btn-sm" onclick="abrirModalMovimiento('ingreso')">+ Ingreso</button>
+          <button class="btn btn-vino btn-sm" onclick="abrirModalMovimiento('egreso')">+ Egreso</button>
+        </div>
+        <div id="mov-resumen"></div>
+        <div style="margin-top:10px;" id="movimientos-lista"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="acordeon">
+    <button class="acordeon-head" onclick="toggleAcordeonCaja(this)">
       <span class="lado-izq"><span class="ico">💰</span>Cierre de caja</span>
       <span class="chev">▾</span>
     </button>
@@ -857,6 +888,8 @@ textarea{resize:vertical; min-height:56px;}
       <div class="acordeon-body-inner cierre-box">
         <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono" id="cierre-apertura">$0</span></div>
         <div class="fila-simple"><span class="n">Ventas efectivo</span><span class="p mono" id="cierre-efectivo">$0</span></div>
+        <div class="fila-simple"><span class="n">Ingresos externos</span><span class="p mono" id="cierre-ingresos" style="color:var(--salvia-suave);">$0</span></div>
+        <div class="fila-simple"><span class="n">Egresos externos</span><span class="p mono" id="cierre-egresos" style="color:var(--vino-suave);">$0</span></div>
         <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono" id="cierre-esperado">$0</span></div>
         <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin:12px 0 6px;">Efectivo contado</label>
         <input type="number" id="input-contado" placeholder="Cuenta el cajón" inputmode="numeric" oninput="calcularDiferencia()">
@@ -944,7 +977,7 @@ const METODOS = {
 /* =========================================================
    ESTADO
    ========================================================= */
-let CAJA = { estado:{ abierta:false, apertura:0, fechaApertura:null }, ventas:[], cierres:[], turnos:[] };
+let CAJA = { estado:{ abierta:false, apertura:0, fechaApertura:null }, ventas:[], cierres:[], turnos:[], movimientos:[] };
 let RESERVAS = { lista:[] };
 let PRODUCTOS = { lista:[] };
 let INVENTARIO = { lista:[] };
@@ -1055,9 +1088,9 @@ function aOracleFecha(iso){ return iso ? iso + 'T00:00:00Z' : null; }
    ========================================================= */
 async function cargarDatos(){
   try{
-    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows] = await Promise.all([
+    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows, movimientosRows] = await Promise.all([
       oListAll('insumos'), oListAll('productos'), oListAll('receta_items'), oListAll('caja_estado'),
-      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas'), oListAll('turnos')
+      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas'), oListAll('turnos'), oListAll('movimientos_caja')
     ]);
 
     INVENTARIO = { lista: insumosRows.map(r=>({ id:r.id, nombre:r.nombre, unidad:r.unidad, stock:Number(r.stock), minimo:Number(r.minimo) })) };
@@ -1077,19 +1110,23 @@ async function cargarDatos(){
         metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
         nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
         estado: v.estado || 'pagada',
+        motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
         servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
         items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) }))
       })),
       cierres: cierresRows.map(c=>{
         const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
         cierreMetodosRows.filter(x=>x.cierre_id===c.id).forEach(x=>{ porMetodo[x.metodo] = Number(x.total); });
-        return { id:c.id, fecha:fechaOracleAISO(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas), esperado:Number(c.esperado), contado:Number(c.contado), diferencia:Number(c.diferencia) };
+        return { id:c.id, fecha:fechaOracleAISO(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas),
+          totalIngresos: Number(c.total_ingresos||0), totalEgresos: Number(c.total_egresos||0),
+          esperado:Number(c.esperado), contado:Number(c.contado), diferencia:Number(c.diferencia) };
       })
     };
 
     RESERVAS = { lista: reservasRows.map(r=>({ id:r.id, nombre:r.nombre, telefono:r.telefono||'', fecha:fechaOracleAISO(r.fecha), hora:r.hora, horaFin:r.hora_fin||'', personas:Number(r.personas), motivo:r.motivo, notas:r.notas||'', estado:r.estado, creada:Number(r.creada), mesas: r.mesas ? String(r.mesas).split(',').filter(Boolean) : [] })) };
 
     CAJA.turnos = turnosRows.map(t=>({ id:t.id, fecha: fechaOracleAISO(t.fecha), cajero:t.cajero, horaInicio:t.hora_inicio, horaFin:t.hora_fin||null, tsInicio:Number(t.ts_inicio), tsFin: t.ts_fin!=null?Number(t.ts_fin):null }));
+    CAJA.movimientos = movimientosRows.map(m=>({ id:m.id, fecha: fechaOracleAISO(m.fecha), tipo:m.tipo, monto:Number(m.monto), motivo:m.motivo, cajero:m.cajero||null, ts:Number(m.ts), cerrada: !!Number(m.cerrada) }));
 
     mostrarToast('Datos cargados desde Oracle ✓');
   }catch(e){
@@ -1204,9 +1241,10 @@ function renderResumen(){
     <button onclick="cambiarVista('inventario')">Ver inventario →</button></div>` : '';
 
   const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy);
-  const totalHoy = ventasHoy.reduce((a,v)=>a+v.total,0);
+  const ventasHoyValidas = ventasHoy.filter(v=>v.estado!=='anulada');
+  const totalHoy = ventasHoyValidas.reduce((a,v)=>a+v.total,0);
   document.getElementById('stat-ventas-total').textContent = fmt(totalHoy);
-  document.getElementById('stat-ventas-count').textContent = ventasHoy.length + (ventasHoy.length===1?' pedido':' pedidos');
+  document.getElementById('stat-ventas-count').textContent = ventasHoyValidas.length + (ventasHoyValidas.length===1?' pedido':' pedidos');
 
   document.getElementById('stat-caja-estado').textContent = CAJA.estado.abierta ? 'Abierta' : 'Cerrada';
   document.getElementById('stat-caja-sub').textContent = CAJA.estado.abierta ? 'Base: ' + fmt(CAJA.estado.apertura) : 'Sin abrir hoy';
@@ -1216,7 +1254,7 @@ function renderResumen(){
   document.getElementById('stat-reservas-sub').textContent = resHoy.length ? 'Agendadas para hoy' : 'Sin reservas';
 
   const ultimasBox = document.getElementById('resumen-ultimas-ventas');
-  const ultimas = [...ventasHoy].sort((a,b)=>b.ts-a.ts).slice(0,5);
+  const ultimas = [...ventasHoyValidas].sort((a,b)=>b.ts-a.ts).slice(0,5);
   ultimasBox.innerHTML = ultimas.length ? ultimas.map(v=>`
     <div class="fila-simple"><span class="n">${v.hora} · ${resumenItems(v.items)}</span><span class="p">${fmt(v.total)}</span></div>`).join('') : '<div class="vacio">Aún no hay ventas hoy</div>';
 
@@ -1328,6 +1366,7 @@ function renderPedidosPendientes(){
           <button onclick="abrirModalDetallePendiente('${v.id}')"><span class="full">Ver</span><span class="corta">V</span></button>
           <button onclick="iniciarAgregarAPendiente('${v.id}')"><span class="full">+ Agregar</span><span class="corta">+</span></button>
           <button onclick="abrirModalDividir('${v.id}')"><span class="full">Dividir</span><span class="corta">÷</span></button>
+          <button class="anular" onclick="abrirModalAnularVenta('${v.id}')"><span class="full">Anular</span><span class="corta">✕</span></button>
           <button class="cobrar" onclick="abrirModalCobroPendiente('${v.id}')"><span class="full">Cobrar</span></button>
         </div>
       </div>
@@ -1584,7 +1623,7 @@ function renderCaja(){
     <div class="txt">Antes de vender más, repón: <b>${bajos.map(b=>b.nombre).join(', ')}</b></div>
     <button onclick="cambiarVista('inventario')">Ir a inventario →</button></div>` : '';
 
-  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy(); renderMesasGrid(); renderPedidosPendientes();
+  buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy(); renderMesasGrid(); renderPedidosPendientes(); renderPedidosAnulados(); renderMovimientosCaja();
   if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
   renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
 }
@@ -1606,6 +1645,62 @@ async function cerrarTurnoAbierto(){
   abierto.horaFin = ahoraStr();
   abierto.tsFin = Date.now();
   await oUpdate('turnos', abierto.id, { id:abierto.id, fecha:aOracleFecha(abierto.fecha), cajero:abierto.cajero, hora_inicio:abierto.horaInicio, hora_fin:abierto.horaFin, ts_inicio:abierto.tsInicio, ts_fin:abierto.tsFin });
+}
+
+/* movimientos de caja externos a ventas: ingresos y egresos manuales */
+function movimientosHoy(){ const hoy = hoyISO(); return CAJA.movimientos.filter(m=>m.fecha===hoy && !m.cerrada); }
+function totalIngresosHoy(){ return movimientosHoy().filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.monto,0); }
+function totalEgresosHoy(){ return movimientosHoy().filter(m=>m.tipo==='egreso').reduce((a,m)=>a+m.monto,0); }
+function abrirModalMovimiento(tipo){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <h3 style="margin-bottom:16px;">${tipo==='ingreso'?'Registrar ingreso':'Registrar egreso'}</h3>
+    <div class="campo" style="text-align:left;"><label>Monto</label><input type="number" id="mov-monto" placeholder="Ej: 20000" inputmode="numeric"></div>
+    <div class="campo" style="text-align:left;"><label>Motivo</label><textarea id="mov-motivo" placeholder="${tipo==='ingreso'?'Ej: aporte extra, cambio para la caja…':'Ej: pago a proveedor, compra urgente de insumos…'}"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-oro" onclick="confirmarMovimiento('${tipo}')">Registrar</button>
+    </div>
+  </div></div>`;
+}
+async function confirmarMovimiento(tipo){
+  const monto = toNum(document.getElementById('mov-monto').value);
+  const motivo = document.getElementById('mov-motivo').value.trim();
+  if(monto<=0){ mostrarToast('Ingresa un monto válido'); return; }
+  if(!motivo){ mostrarToast('Escribe el motivo del movimiento'); return; }
+  const mov = { id: uid('m'), fecha: hoyISO(), tipo, monto, motivo, cajero: CAJA.estado.cajero||null, ts: Date.now(), cerrada:false };
+  try{
+    await oInsert('movimientos_caja', { id:mov.id, fecha:aOracleFecha(mov.fecha), tipo:mov.tipo, monto:mov.monto, motivo:mov.motivo, cajero:mov.cajero, ts:mov.ts, cerrada:0 });
+    CAJA.movimientos.push(mov);
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast(tipo==='ingreso' ? 'Ingreso registrado' : 'Egreso registrado');
+    renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo registrar el movimiento en Oracle'); }
+}
+function eliminarMovimiento(id){
+  confirmar('¿Eliminar este movimiento? Se ajustará el efectivo esperado del cierre.', async ()=>{
+    try{
+      await oDelete('movimientos_caja', id);
+      CAJA.movimientos = CAJA.movimientos.filter(m=>m.id!==id);
+      mostrarToast('Movimiento eliminado');
+      renderCaja();
+    }catch(e){ console.error(e); mostrarToast('No se pudo eliminar el movimiento en Oracle'); }
+  });
+}
+function renderMovimientosCaja(){
+  const cont = document.getElementById('movimientos-lista');
+  if(!cont) return;
+  const movs = movimientosHoy().sort((a,b)=>b.ts-a.ts);
+  const ingresos = totalIngresosHoy(), egresos = totalEgresosHoy();
+  const resumen = document.getElementById('mov-resumen');
+  if(resumen) resumen.innerHTML = `
+    <div class="fila-simple"><span class="n">Ingresos de hoy</span><span class="p" style="color:var(--salvia-suave);">+${fmt(ingresos)}</span></div>
+    <div class="fila-simple"><span class="n">Egresos de hoy</span><span class="p" style="color:var(--vino-suave);">-${fmt(egresos)}</span></div>`;
+  cont.innerHTML = movs.length ? movs.map(m=>`
+    <div class="fila-simple" style="align-items:flex-start;">
+      <span class="n">${m.tipo==='ingreso'?'+':'–'} ${fmt(m.monto)}<br><span style="color:var(--concreto); font-size:.76rem;">${m.motivo}</span></span>
+      <button class="link-btn danger" onclick="eliminarMovimiento('${m.id}')">Eliminar</button>
+    </div>`).join('') : '<div class="vacio">Sin movimientos hoy</div>';
 }
 
 async function abrirCaja(){
@@ -1637,9 +1732,9 @@ function confirmarCierre(){
   const contado = document.getElementById('input-contado').value;
   if(contado === ''){ mostrarToast('Ingresa el efectivo contado antes de cerrar'); return; }
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
-  const esperado = CAJA.estado.apertura + efectivo;
+  const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   const diff = toNum(contado) - esperado;
   const msg = diff===0
     ? '¿Cerrar la caja del día? El efectivo contado cuadra exacto con lo esperado.'
@@ -1652,13 +1747,14 @@ async function cerrarCaja(){
   const hoy = hoyISO();
   const contado = toNum(document.getElementById('input-contado').value);
   try{
-    const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
+    const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
     const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
     ventasHoy.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
-    const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0);
+    const ingresosHoy = totalIngresosHoy(), egresosHoy = totalEgresosHoy();
+    const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0) + ingresosHoy - egresosHoy;
     const cierreId = uid('c');
     await oInsert('cierres', { id:cierreId, fecha:aOracleFecha(hoy), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
-      total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), esperado, contado, diferencia: contado-esperado });
+      total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), total_ingresos: ingresosHoy, total_egresos: egresosHoy, esperado, contado, diferencia: contado-esperado });
     for(const m of Object.keys(porMetodo)){
       await oInsert('cierre_metodos', { id:uid('cm'), cierre_id:cierreId, metodo:m, total: porMetodo[m] });
     }
@@ -1670,7 +1766,11 @@ async function cerrarCaja(){
       v.cerrada = true;
     }
     CAJA.cierres.push({ id:cierreId, fecha:hoy, cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
-      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), esperado, contado, diferencia: contado-esperado });
+      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosHoy, totalEgresos: egresosHoy, esperado, contado, diferencia: contado-esperado });
+    for(const m of movimientosHoy()){
+      await oUpdate('movimientos_caja', m.id, { id:m.id, fecha:aOracleFecha(m.fecha), tipo:m.tipo, monto:m.monto, motivo:m.motivo, cajero:m.cajero, ts:m.ts, cerrada:1 });
+      m.cerrada = true;
+    }
     await cerrarTurnoAbierto();
     await oUpdate('caja_estado', 1, { id:1, abierta:0, apertura:0, fecha_apertura:null, cajero:null });
     CAJA.estado = { abierta:false, apertura:0, fechaApertura:null, cajero:null };
@@ -1686,6 +1786,8 @@ function renderCierrePreview(){
   const esperado = CAJA.estado.apertura + efectivo;
   document.getElementById('cierre-apertura').textContent = fmt(CAJA.estado.apertura);
   document.getElementById('cierre-efectivo').textContent = fmt(efectivo);
+  document.getElementById('cierre-ingresos').textContent = fmt(totalIngresosHoy());
+  document.getElementById('cierre-egresos').textContent = fmt(totalEgresosHoy());
   document.getElementById('cierre-esperado').textContent = fmt(esperado);
   calcularDiferencia();
 }
@@ -1694,9 +1796,9 @@ function calcularDiferencia(){
   const contadoStr = document.getElementById('input-contado').value;
   if(contadoStr===''){ box.innerHTML=''; return; }
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
-  const esperado = CAJA.estado.apertura + efectivo;
+  const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   const contado = toNum(contadoStr);
   const diff = contado - esperado;
   let clase = 'cuadra', texto = 'Cuadra exacto';
@@ -2219,14 +2321,15 @@ function renderHistorialVentas(){
       <td class="mono">${v.mesa ? v.mesa : '—'}</td>
       <td>${v.items.map(i=>`${i.cantidad}× ${i.nombre}`).join(', ')}
         ${v.descuento ? `<br><span style="color:var(--vino-suave); font-size:.74rem;">${v.descuento.tipo==='cortesia'?'Cortesía':'Descuento'} (${v.descuento.motivo}): -${fmt(v.descuento.monto)}</span>` : ''}
+        ${v.motivoAnulacion ? `<br><span style="color:var(--vino-suave); font-size:.74rem;">Anulada: ${v.motivoAnulacion}</span>` : ''}
         ${v.nota?`<br><span style="color:var(--concreto); font-size:.74rem;">${v.nota}</span>`:''}
         ${v.cajero?`<br><span style="color:var(--concreto); font-size:.7rem;">Atendió: ${v.cajero}</span>`:''}
       </td>
-      <td>${v.estado==='pendiente' ? '<span class="tag" style="background:rgba(211,162,78,.16); color:var(--oro-suave);">Pendiente</span>' : `<span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span>`}</td>
+      <td>${v.estado==='pendiente' ? '<span class="tag" style="background:rgba(211,162,78,.16); color:var(--oro-suave);">Pendiente</span>' : v.estado==='anulada' ? '<span class="tag" style="background:rgba(138,53,53,.22); color:var(--vino-suave); text-decoration:line-through;">Anulada</span>' : `<span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span>`}</td>
       <td class="mono">${fmt(v.total)}</td>
       <td><div class="fila-acciones">
         <button class="link-btn" onclick='imprimirVenta(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Imprimir</button>
-        ${v.cerrada ? '' : `<button class="link-btn danger" onclick="anularVenta('${v.id}')">Anular</button>`}
+        ${(!v.cerrada && v.estado!=='anulada') ? `<button class="link-btn danger" onclick="abrirModalAnularVenta('${v.id}')">Anular</button>` : ''}
       </div></td>
     </tr>`).join('') : `<tr><td colspan="6" class="vacio">No hay ventas registradas ese día</td></tr>`;
 }
@@ -2247,17 +2350,66 @@ async function restaurarInventarioPorAnulacion(itemsVenta){
     if(local) local.stock = nuevoStock;
   }
 }
-function anularVenta(id){
-  confirmar('¿Anular esta venta? Se eliminará del historial de hoy y se devolverá el inventario que ya se había descontado.', async ()=>{
-    try{
-      const v = CAJA.ventas.find(x=>x.id===id);
-      if(v) await restaurarInventarioPorAnulacion(v.items);
-      await oDelete('ventas', id); // venta_items se borran solos (ON DELETE CASCADE)
-      CAJA.ventas = CAJA.ventas.filter(x=>x.id!==id);
-      mostrarToast('Venta anulada e inventario devuelto');
-      renderCaja(); renderResumen(); actualizarBadgeInventario();
-    }catch(e){ console.error(e); mostrarToast('No se pudo anular la venta en Oracle'); }
-  });
+let anulacionActual = null;
+function abrirModalAnularVenta(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  anulacionActual = { id: v.id };
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Anular pedido ${v.mesa ? '· Mesa '+v.mesa : ''}</h3>
+    <div style="margin-bottom:14px;">
+      ${v.items.map(i=>`<div class="fila-simple"><span class="n">${i.cantidad}× ${i.nombre}</span><span class="p">${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
+      <div class="fila-simple" style="font-weight:600;"><span class="n">Total</span><span class="p">${fmt(v.total)}</span></div>
+    </div>
+    <div class="campo">
+      <label>Motivo de la anulación</label>
+      <textarea id="anular-motivo" placeholder="Ej: cliente se fue sin pagar, error en el pedido, producto equivocado…"></textarea>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-vino" onclick="confirmarAnulacionVenta()">Anular pedido</button>
+    </div>
+  </div></div>`;
+}
+async function confirmarAnulacionVenta(){
+  const motivo = document.getElementById('anular-motivo').value.trim();
+  if(!motivo){ mostrarToast('Escribe el motivo de la anulación'); return; }
+  const v = CAJA.ventas.find(x=>x.id===anulacionActual.id);
+  if(!v) return;
+  try{
+    await restaurarInventarioPorAnulacion(v.items);
+    const ts = Date.now();
+    const cajero = CAJA.estado.cajero || null;
+    await oUpdate('ventas', v.id, {
+      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
+      descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
+      descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
+      servicio_porcentaje: v.servicioPorcentaje, servicio_monto: v.servicioMonto||0,
+      total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa,
+      estado:'anulada', motivo_anulacion: motivo, anulada_ts: ts, anulada_por: cajero
+    });
+    v.estado = 'anulada'; v.motivoAnulacion = motivo; v.anuladaTs = ts; v.anuladaPor = cajero;
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Pedido anulado e inventario devuelto');
+    renderCaja(); renderResumen(); renderEstadisticas(); actualizarBadgeInventario();
+  }catch(e){ console.error(e); mostrarToast('No se pudo anular el pedido en Oracle'); }
+}
+function renderPedidosAnulados(){
+  const cont = document.getElementById('anulados-lista');
+  if(!cont) return;
+  const hoy = hoyISO();
+  const anuladasHoy = CAJA.ventas.filter(v=>v.estado==='anulada' && v.fecha===hoy).sort((a,b)=>(b.anuladaTs||0)-(a.anuladaTs||0));
+  const badge = document.getElementById('badge-anulados');
+  if(badge){ if(anuladasHoy.length){ badge.textContent = anuladasHoy.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
+  cont.innerHTML = anuladasHoy.length ? anuladasHoy.map(v=>`
+    <div class="fila-simple" style="align-items:flex-start;">
+      <span class="n">${v.hora} · ${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'} · ${resumenItems(v.items)}<br>
+        <span style="color:var(--vino-suave); font-size:.76rem;">${v.motivoAnulacion||''}</span>
+        ${v.anuladaPor ? `<br><span style="color:var(--concreto); font-size:.7rem;">Anuló: ${v.anuladaPor}</span>` : ''}
+      </span>
+      <span class="p">${fmt(v.total)}</span>
+    </div>`).join('') : '<div class="vacio">No hay pedidos anulados hoy</div>';
 }
 
 /* =========================================================
@@ -2318,6 +2470,8 @@ function imprimirCierre(c){
     <div class="ri-linea"></div>
     <div class="ri-fila"><span>Base inicial</span><span>${fmt(c.apertura)}</span></div>
     ${Object.keys(c.porMetodo||{}).map(m=>`<div class="ri-fila"><span>${METODOS[m]?.label||m}</span><span>${fmt(c.porMetodo[m])}</span></div>`).join('')}
+    ${c.totalIngresos>0 ? `<div class="ri-fila"><span>Ingresos externos</span><span>+${fmt(c.totalIngresos)}</span></div>` : ''}
+    ${c.totalEgresos>0 ? `<div class="ri-fila"><span>Egresos externos</span><span>-${fmt(c.totalEgresos)}</span></div>` : ''}
     <div class="ri-linea"></div>
     <div class="ri-fila" style="font-weight:bold;"><span>Total ventas</span><span>${fmt(c.totalVentas)}</span></div>
     <div class="ri-fila"><span>Efectivo esperado</span><span>${fmt(c.esperado)}</span></div>
@@ -2727,7 +2881,7 @@ function setRangoStats(r){
 }
 function ventasEnRango(){
   const hoy = hoyISO();
-  const pagadas = CAJA.ventas.filter(v=>v.estado!=='pendiente');
+  const pagadas = CAJA.ventas.filter(v=>v.estado==='pagada');
   if(rangoStats==='hoy') return pagadas.filter(v=>v.fecha===hoy);
   if(rangoStats==='semana'){
     const limite = Date.now() - 7*24*60*60*1000;
