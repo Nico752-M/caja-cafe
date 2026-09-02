@@ -327,7 +327,7 @@ textarea{resize:vertical; min-height:56px;}
 .acordeon-head .chev{transition:transform .2s; color:var(--oro); font-size:.7rem; flex:0 0 auto;}
 .acordeon.open .acordeon-head .chev{transform:rotate(180deg);}
 .acordeon-body{max-height:0; overflow:hidden; transition:max-height .28s ease;}
-.acordeon.open .acordeon-body{max-height:2400px;}
+.acordeon.open .acordeon-body{max-height:min(2400px, 62vh); overflow-y:auto;}
 .acordeon-body-inner{padding:2px 14px 14px; border-top:1px solid var(--linea);}
 
 /* ---------------- RIEL DE COMANDAS PENDIENTES ---------------- */
