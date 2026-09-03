@@ -291,6 +291,12 @@ textarea{resize:vertical; min-height:56px;}
 ::-webkit-scrollbar{width:8px; height:8px;}
 ::-webkit-scrollbar-thumb{background:var(--linea-fuerte); border-radius:10px;}
 
+/* ---------------- conexión / sincronización ---------------- */
+.conexion-box{display:flex; align-items:center; gap:6px; font-size:.7rem; color:var(--concreto); flex:0 0 auto; padding:6px 10px; border:1px solid var(--linea); border-radius:20px; white-space:nowrap;}
+.conexion-box .punto{width:8px; height:8px; border-radius:50%; background:var(--salvia-suave); flex:0 0 auto;}
+.conexion-box.offline .punto{background:var(--vino-suave);}
+.conexion-box .pend{color:var(--oro-suave); font-family:'IBM Plex Mono',monospace;}
+
 /* ---------------- IMPRESION ---------------- */
 #recibo-imprimible{display:none;}
 @media print{
@@ -320,6 +326,11 @@ textarea{resize:vertical; min-height:56px;}
     <button data-v="inventario" onclick="cambiarVista('inventario')">Inventario<span class="nav-badge hidden" id="badge-inventario">0</span></button>
     <button data-v="reservas" onclick="cambiarVista('reservas')">Reservas</button>
     <button data-v="estadisticas" onclick="cambiarVista('estadisticas')">Estadísticas</button>
+  </div>
+  <div class="conexion-box" id="conexion-box" title="Estado de conexión con Oracle">
+    <span class="punto" id="conexion-punto"></span>
+    <span id="conexion-texto">Verificando…</span>
+    <span class="pend hidden" id="conexion-pendientes"></span>
   </div>
   <button class="icon-btn" onclick="sincronizarConOracle()" title="Sincronizar con Oracle">🔄</button>
   <button class="icon-btn" onclick="abrirModalRespaldo()" title="Exportar / respaldo">⤓</button>
@@ -707,13 +718,166 @@ function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digi
    ========================================================= */
 const ORACLE_BASE = 'https://g473fddcae420b1-cafereal.adb.sa-bogota-1.oraclecloudapps.com/ords/dev_usuario/';
 
+/* =========================================================
+   MODO OFFLINE — copia local (IndexedDB) + cola de pendientes
+   Todo lo que no se pueda enviar a Oracle por falta de internet
+   se guarda en el navegador y se reintenta solo al volver la señal.
+   ========================================================= */
+const IDB_NOMBRE = 'cafe_real_offline';
+const IDB_VERSION = 1;
+function idbOpen(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(IDB_NOMBRE, IDB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains('snapshot')) db.createObjectStore('snapshot');
+      if(!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath:'id', autoIncrement:true });
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbGet(store, key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(store, 'readonly');
+    const r = tx.objectStore(store).get(key);
+    r.onsuccess = ()=>resolve(r.result || null);
+    r.onerror = ()=>reject(r.error);
+  });
+}
+async function idbSet(store, key, val){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).put(val, key);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function idbAdd(store, val){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).add(val);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function idbDelete(store, key){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+  });
+}
+async function idbAllOrdenados(store){
+  const db = await idbOpen();
+  return new Promise((resolve, reject)=>{
+    const tx = db.transaction(store, 'readonly');
+    const r = tx.objectStore(store).getAll(); // en IndexedDB, getAll() respeta el orden de la clave (autoIncrement asc.)
+    r.onsuccess = ()=>resolve(r.result || []);
+    r.onerror = ()=>reject(r.error);
+  });
+}
+
+/* guarda una copia de todo lo que ve la interfaz, para poder abrir la app sin internet */
+function guardarSnapshotLocal(){
+  idbSet('snapshot', 'estado', { CAJA, RESERVAS, PRODUCTOS, INVENTARIO, guardado: Date.now() })
+    .catch(e=>console.error('No se pudo guardar la copia local:', e));
+}
+async function cargarSnapshotLocal(){
+  try{ return await idbGet('snapshot', 'estado'); }
+  catch(e){ console.error('No se pudo leer la copia local:', e); return null; }
+}
+
+/* encola una operación de escritura que no se pudo enviar a Oracle por falta de conexión */
+async function encolarPendiente(metodo, path, body){
+  await idbAdd('outbox', { metodo, path, body: body||null, ts: Date.now() });
+  await actualizarContadorPendientes();
+}
+async function contarPendientes(){
+  try{ return (await idbAllOrdenados('outbox')).length; }
+  catch(e){ return 0; }
+}
+async function actualizarContadorPendientes(){
+  const n = await contarPendientes();
+  const el = document.getElementById('conexion-pendientes');
+  if(!el) return;
+  if(n>0){ el.textContent = n + ' pendiente' + (n>1?'s':''); el.classList.remove('hidden'); }
+  else{ el.textContent=''; el.classList.add('hidden'); }
+}
+function actualizarIndicadorConexion(enLinea){
+  const box = document.getElementById('conexion-box');
+  const texto = document.getElementById('conexion-texto');
+  if(!box || !texto) return;
+  box.classList.toggle('offline', !enLinea);
+  texto.textContent = enLinea ? 'En línea' : 'Sin conexión';
+}
+
+/* intenta enviar UNA operación pendiente directo a Oracle (sin volver a encolar si falla) */
+async function intentarEnviarPendiente(op){
+  let r;
+  try{
+    r = await fetch(ORACLE_BASE + op.path, { method: op.metodo, headers:{ 'Content-Type':'application/json', 'Accept':'application/json' }, body: op.body || undefined });
+  }catch(e){
+    const err = new Error('red'); err.tipo = 'red'; throw err;
+  }
+  if(!r.ok){
+    const txt = await r.text().catch(()=>'');
+    const err = new Error(`${op.metodo} ${op.path} → ${r.status}: ${txt}`); err.tipo = 'servidor';
+    throw err;
+  }
+}
+/* recorre la cola en orden (FIFO) y la va vaciando mientras haya internet */
+let sincronizandoPendientes = false;
+async function sincronizarPendientes(){
+  if(sincronizandoPendientes) return;
+  sincronizandoPendientes = true;
+  try{
+    const pendientes = await idbAllOrdenados('outbox');
+    if(!pendientes.length){ actualizarIndicadorConexion(navigator.onLine); return; }
+    let enviados = 0, conError = 0;
+    for(const op of pendientes){
+      try{
+        await intentarEnviarPendiente(op);
+        await idbDelete('outbox', op.id);
+        enviados++;
+      }catch(e){
+        if(e.tipo === 'red'){ actualizarIndicadorConexion(false); break; } // sigue sin señal: se detiene y reintenta luego
+        console.error('Se descartó un cambio pendiente porque Oracle lo rechazó:', op, e);
+        await idbDelete('outbox', op.id); // no lo dejamos trabado para siempre
+        conError++;
+      }
+    }
+    await actualizarContadorPendientes();
+    if(enviados>0) actualizarIndicadorConexion(true);
+    if(enviados>0) mostrarToast(enviados + ' cambio' + (enviados>1?'s':'') + ' sincronizado' + (enviados>1?'s':'') + ' con Oracle');
+    if(conError>0) mostrarToast('Atención: ' + conError + ' cambio(s) pendientes no se pudieron aplicar en Oracle (revisa la consola)');
+  }finally{
+    sincronizandoPendientes = false;
+  }
+}
+
 async function oFetch(path, options={}){
   const opts = { ...options, headers:{ 'Content-Type':'application/json', 'Accept':'application/json', ...(options.headers||{}) } };
   if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+  const esEscritura = options.method && options.method !== 'GET';
   let r;
   try{ r = await fetch(ORACLE_BASE + path, opts); }
-  catch(e){ throw new Error('No se pudo conectar con Oracle (revisa tu internet o CORS): ' + e.message); }
+  catch(e){
+    if(esEscritura){
+      // sin internet: se guarda localmente y se sincroniza después
+      await encolarPendiente(options.method, path, opts.body);
+      actualizarIndicadorConexion(false);
+      return { __offline:true };
+    }
+    throw new Error('No se pudo conectar con Oracle (revisa tu internet o CORS): ' + e.message);
+  }
   if(!r.ok){ const txt = await r.text().catch(()=>''); throw new Error(`${options.method||'GET'} ${path} → ${r.status}: ${txt}`); }
+  actualizarIndicadorConexion(true);
   if(r.status===204) return null;
   const txt = await r.text();
   return txt ? JSON.parse(txt) : null;
@@ -741,6 +905,7 @@ function aOracleFecha(iso){ return iso ? iso + 'T00:00:00Z' : null; }
    la copia local en memoria que usa la interfaz.
    ========================================================= */
 async function cargarDatos(){
+  let cargadoDesdeRed = false;
   try{
     const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows] = await Promise.all([
       oListAll('insumos'), oListAll('productos'), oListAll('receta_items'), oListAll('caja_estado'),
@@ -774,19 +939,39 @@ async function cargarDatos(){
 
     RESERVAS = { lista: reservasRows.map(r=>({ id:r.id, nombre:r.nombre, telefono:r.telefono||'', fecha:fechaOracleAISO(r.fecha), hora:r.hora, personas:Number(r.personas), motivo:r.motivo, notas:r.notas||'', estado:r.estado, creada:Number(r.creada) })) };
 
+    cargadoDesdeRed = true;
+    guardarSnapshotLocal();
     mostrarToast('Datos cargados desde Oracle ✓');
   }catch(e){
     console.error(e);
-    mostrarToast('No se pudo conectar con Oracle. Revisa la consola (F12) para más detalle.');
+    const snap = await cargarSnapshotLocal();
+    if(snap){
+      CAJA = snap.CAJA; RESERVAS = snap.RESERVAS; PRODUCTOS = snap.PRODUCTOS; INVENTARIO = snap.INVENTARIO;
+      const cuando = snap.guardado ? new Date(snap.guardado).toLocaleString('es-CO') : '';
+      mostrarToast('Sin conexión: mostrando la última información guardada en este dispositivo (' + cuando + ')');
+    }else{
+      mostrarToast('No se pudo conectar con Oracle y todavía no hay datos guardados en este dispositivo.');
+    }
   }
   catActiva = Object.keys(CATEGORIAS)[0];
   renderTodo();
+  actualizarIndicadorConexion(cargadoDesdeRed);
+  await actualizarContadorPendientes();
   const loader = document.getElementById('loader');
   if(loader){ loader.style.opacity='0'; setTimeout(()=>loader.remove(), 250); }
 }
 async function sincronizarConOracle(){
   mostrarToast('Sincronizando con Oracle…');
+  await sincronizarPendientes();
   await cargarDatos();
+}
+/* se dispara solo al recuperar internet o cada cierto tiempo, sin que el usuario tenga que tocar nada */
+async function intentarSincronizarAutomatico(){
+  const n = await contarPendientes();
+  if(!n) { actualizarIndicadorConexion(navigator.onLine); return; }
+  await sincronizarPendientes();
+  const restantes = await contarPendientes();
+  if(restantes < n) await cargarDatos();
 }
 
 
