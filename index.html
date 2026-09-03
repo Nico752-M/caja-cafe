@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Café Real · Caja</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#15120e">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Café Real">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1082,6 +1088,7 @@ function renderResumen(){
     <div class="fila-simple"><span class="n">${r.fecha===hoy?'Hoy':fechaCorta(r.fecha)} · ${r.hora} — ${r.nombre}</span><span class="p">${r.personas} pers.</span></div>`).join('') : '<div class="vacio">No hay próximas reservas</div>';
 
   actualizarBadgeInventario();
+  guardarSnapshotLocal();
 }
 function resumenItems(items){
   const total = items.reduce((a,i)=>a+i.cantidad,0);
@@ -1096,7 +1103,7 @@ function fechaCorta(iso){ const d = new Date(iso+'T00:00:00'); return d.toLocale
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
   const abiertaBox = document.getElementById('caja-abierta-box');
-  if(!CAJA.estado.abierta){ cerradaBox.classList.remove('hidden'); abiertaBox.classList.add('hidden'); return; }
+  if(!CAJA.estado.abierta){ cerradaBox.classList.remove('hidden'); abiertaBox.classList.add('hidden'); guardarSnapshotLocal(); return; }
   cerradaBox.classList.add('hidden'); abiertaBox.classList.remove('hidden');
   document.getElementById('cajero-actual').textContent = CAJA.estado.cajero || 'Sin nombre';
 
@@ -1108,6 +1115,7 @@ function renderCaja(){
   buildCatPills(); buildItemGrid(); renderPedido();
   if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
   renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
+  guardarSnapshotLocal();
 }
 async function abrirCaja(){
   const val = toNum(document.getElementById('input-apertura').value || 0);
@@ -1393,13 +1401,14 @@ async function descontarInventarioEnOracle(itemsVenta){
     if(!prod || !prod.receta || !prod.receta.length) return;
     prod.receta.forEach(r=>{ necesita[r.insumoId] = (necesita[r.insumoId]||0) + r.cantidad*it.cantidad; });
   });
+  /* como solo hay una caja, se usa directamente el stock local en memoria
+     (que ya viene sincronizado) en vez de pedirlo a Oracle — así funciona igual sin internet */
   for(const insumoId of Object.keys(necesita)){
-    const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
-    if(!fresco) continue;
-    const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
-    await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
-    if(local) local.stock = nuevoStock;
+    if(!local) continue;
+    const nuevoStock = Math.max(0, local.stock - necesita[insumoId]);
+    local.stock = nuevoStock;
+    await oUpdate('insumos', insumoId, { id:local.id, nombre:local.nombre, unidad:local.unidad, stock:nuevoStock, minimo:local.minimo });
   }
 }
 
@@ -1522,6 +1531,7 @@ function renderProductos(){
       </div>
     </div>`;
   }).join('') + `<div class="prod-card add-prod-card" onclick="abrirModalProducto(null)"><div class="plus">+</div>Nuevo producto</div>`;
+  guardarSnapshotLocal();
 }
 function setProdCat(k){ prodCatActiva = k; renderProductos(); }
 function eliminarProducto(id){
@@ -1639,6 +1649,7 @@ function renderInventario(){
       <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
     </tr>`;
   }).join('') : `<tr><td colspan="6" class="vacio">Aún no hay insumos registrados</td></tr>`;
+  guardarSnapshotLocal();
 }
 async function agregarInsumo(e){
   e.preventDefault();
@@ -1659,12 +1670,12 @@ async function agregarInsumo(e){
   return false;
 }
 async function ajustarStock(id, delta){
+  const i = INVENTARIO.lista.find(x=>x.id===id);
+  if(!i) return;
   try{
-    const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
-    const nuevoStock = Math.max(0, Number(fresco.stock) + delta);
-    await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
-    const i = INVENTARIO.lista.find(x=>x.id===id);
-    if(i) i.stock = nuevoStock;
+    const nuevoStock = Math.max(0, i.stock + delta);
+    await oUpdate('insumos', id, { id:i.id, nombre:i.nombre, unidad:i.unidad, stock:nuevoStock, minimo:i.minimo });
+    i.stock = nuevoStock;
     renderInventario(); actualizarBadgeInventario(); renderCaja();
   }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
 }
@@ -1672,13 +1683,13 @@ async function ajustarStockInput(id){
   const input = document.getElementById('ajuste-'+id);
   const val = parseFloat(input.value);
   if(!val) return;
+  const i = INVENTARIO.lista.find(x=>x.id===id);
+  if(!i) return;
   try{
-    const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
-    const nuevoStock = Math.max(0, Number(fresco.stock) + val);
-    await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
-    const i = INVENTARIO.lista.find(x=>x.id===id);
-    if(i) i.stock = nuevoStock;
-    mostrarToast('Stock de ' + fresco.nombre + ' actualizado');
+    const nuevoStock = Math.max(0, i.stock + val);
+    await oUpdate('insumos', id, { id:i.id, nombre:i.nombre, unidad:i.unidad, stock:nuevoStock, minimo:i.minimo });
+    i.stock = nuevoStock;
+    mostrarToast('Stock de ' + i.nombre + ' actualizado');
     renderInventario(); actualizarBadgeInventario(); renderCaja();
   }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
 }
@@ -1826,7 +1837,7 @@ function renderReservas(){
   lista.sort((a,b)=> (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
 
   const cont = document.getElementById('lista-reservas');
-  if(!lista.length){ cont.innerHTML = '<div class="card"><div class="vacio">No hay reservas para mostrar</div></div>'; return; }
+  if(!lista.length){ cont.innerHTML = '<div class="card"><div class="vacio">No hay reservas para mostrar</div></div>'; guardarSnapshotLocal(); return; }
 
   const grupos = {};
   lista.forEach(r=>{ (grupos[r.fecha] = grupos[r.fecha] || []).push(r); });
@@ -1855,6 +1866,7 @@ function renderReservas(){
       </div>`).join('');
     return `<div class="fecha-grupo"><div class="fecha-eyebrow">${label} ${esHoy?'<span class="hoy-chip">HOY</span>':''}</div>${items}</div>`;
   }).join('');
+  guardarSnapshotLocal();
 }
 
 /* =========================================================
@@ -1911,6 +1923,7 @@ function renderEstadisticas(){
       <div class="bar-track"><div class="bar-fill" style="width:${(porMetodo[m]/maxMetodo*100)}%"></div></div>
       <div class="bar-val">${fmt(porMetodo[m])}</div>
     </div>`).join('');
+  guardarSnapshotLocal();
 }
 
 /* =========================================================
@@ -1975,6 +1988,13 @@ function exportarReservasCSV(){
    INIT
    ========================================================= */
 document.getElementById('r-fecha').valueAsDate = new Date();
+actualizarIndicadorConexion(navigator.onLine);
+window.addEventListener('online', intentarSincronizarAutomatico);
+window.addEventListener('offline', ()=>actualizarIndicadorConexion(false));
+setInterval(intentarSincronizarAutomatico, 20000); // reintenta cada 20s por si el navegador no avisa el cambio de red
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('/sw.js').catch(e=>console.error('No se pudo registrar el service worker:', e)); });
+}
 cargarDatos();
 </script>
 </body>
