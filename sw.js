@@ -41,7 +41,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // El resto (HTML, JS, CSS propios): red primero, caché de respaldo si no hay internet.
+   // El resto (HTML, JS, CSS propios): red primero, caché de respaldo si no hay internet.
   e.respondWith(
     fetch(e.request)
       .then((resp) => {
@@ -49,6 +49,12 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, copia));
         return resp;
       })
-      .catch(() => caches.match(e.request).then((cached) => cached || caches.match('/')))
+      .catch(() => {
+        return caches.match(e.request).then((cached) => {
+          if (cached) return cached;
+          if (e.request.mode === 'navigate') return caches.match('/');
+          return new Response('', { status: 504, statusText: 'Sin conexión' });
+        });
+      })
   );
 });
