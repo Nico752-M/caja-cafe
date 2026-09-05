@@ -456,7 +456,7 @@ textarea{resize:vertical; min-height:56px;}
 <div class="topbar">
   <div class="brand">
     <div class="mark">CR</div>
-    <div><strong>Café Real</strong><small>Caja &amp; Operación</small></div>
+    <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span></small></div>
   </div>
   <div class="tabs" id="tabs">
     <button data-v="resumen" class="active" onclick="cambiarVista('resumen')">Resumen</button>
@@ -468,7 +468,7 @@ textarea{resize:vertical; min-height:56px;}
   </div>
   <button class="icon-btn" onclick="sincronizarConOracle()" title="Sincronizar con Oracle">🔄</button>
   <button class="icon-btn" onclick="abrirModalRespaldo()" title="Exportar / respaldo">⤓</button>
-  <div class="reloj" id="reloj"><strong>--:--</strong><span id="reloj-fecha">--</span></div>
+  <div class="reloj" id="reloj"><strong>--:--</strong><span id="reloj-fecha">--</span><span style="display:block; opacity:.35; letter-spacing:.15em; font-size:.6rem; margin-top:2px; transition:opacity .3s ease;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.35">NOVA</span></div>
 </div>
 
 <main>
