@@ -460,7 +460,7 @@ textarea{resize:vertical; min-height:56px;}
 <div class="topbar">
   <div class="brand">
     <div class="mark">CR</div>
-    <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span></small></div>
+    <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span> · <span style="opacity:.4;">v1.1</span></small></div>
   </div>
   <div class="tabs" id="tabs">
     <button data-v="resumen" class="active" onclick="cambiarVista('resumen')">Resumen</button>
@@ -892,6 +892,7 @@ textarea{resize:vertical; min-height:56px;}
       <div class="acordeon-body-inner cierre-box">
         <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono" id="cierre-apertura">$0</span></div>
         <div class="fila-simple"><span class="n">Ventas efectivo</span><span class="p mono" id="cierre-efectivo">$0</span></div>
+        <div class="fila-simple" style="opacity:.65;"><span class="n">Total ventas (todos los métodos)</span><span class="p mono" id="cierre-total-metodos">$0</span></div>
         <div class="fila-simple"><span class="n">Ingresos externos</span><span class="p mono" id="cierre-ingresos" style="color:var(--salvia-suave);">$0</span></div>
         <div class="fila-simple"><span class="n">Egresos externos</span><span class="p mono" id="cierre-egresos" style="color:var(--vino-suave);">$0</span></div>
         <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono" id="cierre-esperado">$0</span></div>
@@ -1802,11 +1803,13 @@ async function cerrarCaja(){
 }
 function renderCierrePreview(){
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
-  const esperado = CAJA.estado.apertura + efectivo;
+  const totalTodosMetodos = ventasHoy.reduce((a,v)=>a+v.total,0);
+  const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   document.getElementById('cierre-apertura').textContent = fmt(CAJA.estado.apertura);
   document.getElementById('cierre-efectivo').textContent = fmt(efectivo);
+  document.getElementById('cierre-total-metodos').textContent = fmt(totalTodosMetodos);
   document.getElementById('cierre-ingresos').textContent = fmt(totalIngresosHoy());
   document.getElementById('cierre-egresos').textContent = fmt(totalEgresosHoy());
   document.getElementById('cierre-esperado').textContent = fmt(esperado);
