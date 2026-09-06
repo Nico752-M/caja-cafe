@@ -590,9 +590,6 @@ textarea{resize:vertical; min-height:56px;}
 
           <div class="metodo-row" id="metodo-row">
             <button data-m="efectivo" class="active" onclick="setMetodo('efectivo')">Efectivo</button>
-            <button data-m="tarjeta" onclick="setMetodo('tarjeta')">Tarjeta</button>
-            <button data-m="nequi" onclick="setMetodo('nequi')">Nequi</button>
-            <button data-m="daviplata" onclick="setMetodo('daviplata')">Daviplata</button>
             <button data-m="transferencia" onclick="setMetodo('transferencia')">Transf.</button>
           </div>
 
@@ -998,7 +995,7 @@ function handleImgError(img, nombre, variante){
 function uid(prefix){ return prefix + Date.now() + Math.floor(Math.random()*1000); }
 
 const METODOS = {
-  efectivo:{label:"Efectivo"}, tarjeta:{label:"Tarjeta"}, nequi:{label:"Nequi"}, daviplata:{label:"Daviplata"}, transferencia:{label:"Transferencia"}
+  efectivo:{label:"Efectivo"}, transferencia:{label:"Transferencia"}
 };
 
 /* =========================================================
@@ -1415,9 +1412,6 @@ function abrirModalCobroPendiente(id){
     </div>
     <div class="metodo-row" id="metodo-row-pendiente">
       <button data-m="efectivo" class="active" onclick="setMetodoPendiente('efectivo')">Efectivo</button>
-      <button data-m="tarjeta" onclick="setMetodoPendiente('tarjeta')">Tarjeta</button>
-      <button data-m="nequi" onclick="setMetodoPendiente('nequi')">Nequi</button>
-      <button data-m="daviplata" onclick="setMetodoPendiente('daviplata')">Daviplata</button>
       <button data-m="transferencia" onclick="setMetodoPendiente('transferencia')">Transf.</button>
     </div>
     <div class="efectivo-box" id="efectivo-box-pendiente" style="margin-top:12px;">
