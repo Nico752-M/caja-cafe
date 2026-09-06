@@ -2458,7 +2458,7 @@ function imprimirVenta(venta){
     ${venta.mesa ? `<div class="ri-fila"><span>MESA:</span><span>${venta.mesa}</span></div>` : ''}
     <div class="ri-fila"><span>FORMA PAGO:</span><span>${METODOS[venta.metodo]?.label||venta.metodo}</span></div>
     <div class="ri-linea"></div>
-    ${venta.items.map(i=>`<div class="ri-fila" style="font-weight:600;"><span>${i.cantidad} x ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div><div class="ri-fila" style="font-size:9px; color:#333; margin-top:-2px;"><span>${fmt(i.precio)} c/u</span><span></span></div>`).join('')}
+        ${venta.items.map(i=>`<div class="ri-fila" style="font-weight:600;"><span>${i.cantidad} x ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
     <div class="ri-linea"></div>
     <div class="ri-fila"><span>SUBTOTAL:</span><span>${fmt(venta.subtotal)}</span></div>
     ${venta.descuento ? `<div class="ri-fila"><span>${venta.descuento.tipo==='cortesia'?'CORTESÍA':'DESCUENTO'} (${venta.descuento.motivo}):</span><span>-${fmt(venta.descuento.monto)}</span></div>` : ''}
@@ -2467,8 +2467,7 @@ function imprimirVenta(venta){
     <div class="ri-fila ri-total-final"><span>TOTAL A PAGAR:</span><span>${fmt(venta.total)}</span></div>
     ${venta.recibido!=null ? `<div class="ri-fila"><span>Recibido</span><span>${fmt(venta.recibido)}</span></div><div class="ri-fila"><span>Cambio</span><span>${fmt(venta.cambio)}</span></div>` : ''}
     <div class="ri-linea"></div>
-    <div class="centrado">¡Gracias por hacer negocios con nosotros!</div>
-    <div class="centrado">cafereal.vercel.app</div>
+    <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
   `;
   setTimeout(()=>window.print(), 80);
