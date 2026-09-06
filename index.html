@@ -2487,14 +2487,14 @@ function renderCierresAnteriores(){
       <td class="mono">${fechaCorta(c.fecha)}</td>
       <td>${c.cajero||'—'}</td>
       <td class="mono">${fmt(c.apertura)}</td>
-      <td class="mono">${fmt(c.totalVentas)}
-        ${Object.keys(c.porMetodo||{}).filter(m=>m!=='efectivo' && c.porMetodo[m]>0).map(m=>`
-          <div style="opacity:.55; font-size:.72rem; font-weight:400;">${METODOS[m]?.label||m}: ${fmt(c.porMetodo[m])}</div>`).join('')}
-      </td>
+      <td class="mono">${fmt(c.totalVentas)}</td>
       <td class="mono">${fmt(c.esperado)}</td>
       <td class="mono">${fmt(c.contado)}</td>
       <td class="mono" style="color:${c.diferencia<0?'var(--vino-suave)':c.diferencia>0?'var(--oro-suave)':'var(--salvia-suave)'}">${c.diferencia===0?'Cuadrado':fmt(c.diferencia)}</td>
-      <td><button class="link-btn" onclick='imprimirCierre(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Imprimir</button></td>
+      <td>
+        <button class="link-btn" onclick='imprimirCierre(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Imprimir</button>
+        <button class="link-btn" style="margin-left:10px;" onclick='verDetalleCierre(${JSON.stringify(c).replace(/'/g,"&#39;")})'>⋯</button>
+      </td>
     </tr>`).join('') : `<tr><td colspan="8" class="vacio">Aún no se ha cerrado ninguna caja</td></tr>`;
 }
 function imprimirCierre(c){
@@ -2521,6 +2521,22 @@ function imprimirCierre(c){
   setTimeout(()=>window.print(), 80);
 }
 
+function verDetalleCierre(c){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <h3>Cierre del ${fechaCorta(c.fecha)}${c.cajero ? ' · '+c.cajero : ''}</h3>
+    <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono">${fmt(c.apertura)}</span></div>
+    ${Object.keys(c.porMetodo||{}).filter(m=>c.porMetodo[m]>0).map(m=>`
+      <div class="fila-simple"><span class="n">${METODOS[m]?.label||m}</span><span class="p mono">${fmt(c.porMetodo[m])}</span></div>`).join('')}
+    <div class="fila-simple" style="font-weight:600;"><span class="n">Total ventas</span><span class="p mono">${fmt(c.totalVentas)}</span></div>
+    ${c.totalIngresos>0 ? `<div class="fila-simple"><span class="n">Ingresos externos</span><span class="p mono" style="color:var(--salvia-suave);">+${fmt(c.totalIngresos)}</span></div>` : ''}
+    ${c.totalEgresos>0 ? `<div class="fila-simple"><span class="n">Egresos externos</span><span class="p mono" style="color:var(--vino-suave);">-${fmt(c.totalEgresos)}</span></div>` : ''}
+    <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono">${fmt(c.esperado)}</span></div>
+    <div class="fila-simple"><span class="n">Efectivo contado</span><span class="p mono">${fmt(c.contado)}</span></div>
+    <div class="fila-simple" style="font-weight:600;"><span class="n">Diferencia</span><span class="p mono" style="color:${c.diferencia<0?'var(--vino-suave)':c.diferencia>0?'var(--oro-suave)':'var(--salvia-suave)'}">${c.diferencia===0?'Cuadrado':fmt(c.diferencia)}</span></div>
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''" style="margin-top:14px;">Cerrar</button>
+  </div></div>`;
+}
 /* =========================================================
    PRODUCTOS (catálogo + recetas)
    ========================================================= */
