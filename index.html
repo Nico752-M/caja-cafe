@@ -460,7 +460,7 @@ textarea{resize:vertical; min-height:56px;}
 <div class="topbar">
   <div class="brand">
     <div class="mark">CR</div>
-    <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span></small></div>
+    <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span> · <span style="opacity:.4;">v1.1</span></small></div>
   </div>
   <div class="tabs" id="tabs">
     <button data-v="resumen" class="active" onclick="cambiarVista('resumen')">Resumen</button>
@@ -528,7 +528,7 @@ textarea{resize:vertical; min-height:56px;}
       <label for="input-cajero">¿Quién atiende hoy?</label>
       <input type="text" id="input-cajero" placeholder="Tu nombre" style="margin-bottom:18px;">
       <label for="input-apertura">Efectivo inicial (base)</label>
-      <input type="number" id="input-apertura" placeholder="Ej: 50000" inputmode="numeric">
+      <input type="text" id="input-apertura" placeholder="Ej: 50000" inputmode="numeric" oninput="formatearMiles(this)">
       <button class="btn btn-oro btn-block" onclick="abrirCaja()">Abrir caja</button>
     </div>
 
@@ -892,11 +892,13 @@ textarea{resize:vertical; min-height:56px;}
       <div class="acordeon-body-inner cierre-box">
         <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono" id="cierre-apertura">$0</span></div>
         <div class="fila-simple"><span class="n">Ventas efectivo</span><span class="p mono" id="cierre-efectivo">$0</span></div>
+        <div class="fila-simple" style="opacity:.65;"><span class="n">Total ventas (todos los métodos)</span><span class="p mono" id="cierre-total-metodos">$0</span></div>
+        <div id="cierre-desglose-metodos"></div>
         <div class="fila-simple"><span class="n">Ingresos externos</span><span class="p mono" id="cierre-ingresos" style="color:var(--salvia-suave);">$0</span></div>
         <div class="fila-simple"><span class="n">Egresos externos</span><span class="p mono" id="cierre-egresos" style="color:var(--vino-suave);">$0</span></div>
         <div class="fila-simple"><span class="n">Efectivo esperado</span><span class="p mono" id="cierre-esperado">$0</span></div>
         <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin:12px 0 6px;">Efectivo contado</label>
-        <input type="number" id="input-contado" placeholder="Cuenta el cajón" inputmode="numeric" oninput="calcularDiferencia()">
+        <input type="text" id="input-contado" placeholder="Cuenta el cajón" inputmode="numeric" oninput="formatearMiles(this); calcularDiferencia()">
         <div id="diferencia-box"></div>
         <button class="btn btn-vino btn-block" onclick="confirmarCierre()">Cerrar caja del día</button>
       </div>
@@ -966,6 +968,10 @@ const RECETAS_SEED = {
 
 function toNum(p){ return parseInt(String(p).replace(/\./g,''), 10) || 0; }
 function fmt(n){ return '$' + Math.round(n||0).toLocaleString('es-CO'); }
+function formatearMiles(el){
+  const soloDigitos = el.value.replace(/\D/g,'');
+  el.value = soloDigitos ? Number(soloDigitos).toLocaleString('es-CO') : '';
+}
 function iconFor(name){
   const stop = ['de','del','con','y','la','el','en','a','los','las'];
   const words = name.trim().split(/\s+/).filter(w => w && !stop.includes(w.toLowerCase()));
@@ -1676,7 +1682,7 @@ function abrirModalMovimiento(tipo){
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="overlay"><div class="modal-box">
     <h3 style="margin-bottom:16px;">${tipo==='ingreso'?'Registrar ingreso':'Registrar egreso'}</h3>
-    <div class="campo" style="text-align:left;"><label>Monto</label><input type="number" id="mov-monto" placeholder="Ej: 20000" inputmode="numeric"></div>
+    <div class="campo" style="text-align:left;"><label>Monto</label><input type="text" id="mov-monto" placeholder="Ej: 20000" inputmode="numeric" oninput="formatearMiles(this)"></div>
     <div class="campo" style="text-align:left;"><label>Motivo</label><textarea id="mov-motivo" placeholder="${tipo==='ingreso'?'Ej: aporte extra, cambio para la caja…':'Ej: pago a proveedor, compra urgente de insumos…'}"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
@@ -1802,11 +1808,18 @@ async function cerrarCaja(){
 }
 function renderCierrePreview(){
   const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado!=='pendiente');
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
   const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
-  const esperado = CAJA.estado.apertura + efectivo;
+  const totalTodosMetodos = ventasHoy.reduce((a,v)=>a+v.total,0);
+  const porMetodoHoy = {}; Object.keys(METODOS).forEach(m=>porMetodoHoy[m]=0);
+  ventasHoy.forEach(v=>{ porMetodoHoy[v.metodo] = (porMetodoHoy[v.metodo]||0) + v.total; });
+  const desglose = document.getElementById('cierre-desglose-metodos');
+  desglose.innerHTML = Object.keys(METODOS).filter(m=>m!=='efectivo').map(m=>`
+    <div class="fila-simple" style="opacity:.55; padding-left:14px; font-size:.8rem;"><span class="n">${METODOS[m].label}</span><span class="p mono">${fmt(porMetodoHoy[m])}</span></div>`).join('');
+  const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   document.getElementById('cierre-apertura').textContent = fmt(CAJA.estado.apertura);
   document.getElementById('cierre-efectivo').textContent = fmt(efectivo);
+  document.getElementById('cierre-total-metodos').textContent = fmt(totalTodosMetodos);
   document.getElementById('cierre-ingresos').textContent = fmt(totalIngresosHoy());
   document.getElementById('cierre-egresos').textContent = fmt(totalEgresosHoy());
   document.getElementById('cierre-esperado').textContent = fmt(esperado);
@@ -3007,9 +3020,9 @@ function exportarReservasCSV(){
   descargarArchivo('cafe-real-reservas-'+hoyISO()+'.csv', '\uFEFF'+csv, 'text/csv;charset=utf-8');
 }
 
-/* ========================================================
+/* =========================================================
    INIT
-   ======================================================== */
+   ========================================================= */
 document.getElementById('r-fecha').valueAsDate = new Date();
 cargarDatos();
 
