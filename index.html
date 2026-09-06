@@ -441,16 +441,17 @@ textarea{resize:vertical; min-height:56px;}
 /* ---------------- IMPRESION ---------------- */
 #recibo-imprimible{display:none;}
 @media print{
-  body *{visibility:hidden;}
-  #recibo-imprimible, #recibo-imprimible *{visibility:visible;}
-  #recibo-imprimible{display:block; position:absolute; left:0; top:0; width:78mm; padding:6px; font-family:'IBM Plex Mono',monospace; color:#000; background:#fff;}
+  body > *:not(#recibo-imprimible){display:none !important;}
+  #recibo-imprimible{display:block !important; width:78mm; padding:6px; font-family:'IBM Plex Mono',monospace; color:#000; background:#fff;}
   #recibo-imprimible .ri-linea{border-top:1px dashed #000; margin:6px 0;}
   #recibo-imprimible .ri-fila{display:flex; justify-content:space-between; font-size:11px; margin:2px 0;}
   #recibo-imprimible h4{font-size:15px; text-align:center; margin-bottom:1px; letter-spacing:.06em;}
   #recibo-imprimible .ri-sub{text-align:center; font-size:9px; letter-spacing:.1em; margin-bottom:6px;}
   #recibo-imprimible .centrado{text-align:center; font-size:10px;}
   #recibo-imprimible .ri-total-final{font-size:13px; font-weight:bold; margin:4px 0;}
+  @page{ margin:4mm; }
 }
+
 </style>
 </head>
 <body>
