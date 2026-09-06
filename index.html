@@ -2487,7 +2487,10 @@ function renderCierresAnteriores(){
       <td class="mono">${fechaCorta(c.fecha)}</td>
       <td>${c.cajero||'—'}</td>
       <td class="mono">${fmt(c.apertura)}</td>
-      <td class="mono">${fmt(c.totalVentas)}</td>
+      <td class="mono">${fmt(c.totalVentas)}
+        ${Object.keys(c.porMetodo||{}).filter(m=>m!=='efectivo' && c.porMetodo[m]>0).map(m=>`
+          <div style="opacity:.55; font-size:.72rem; font-weight:400;">${METODOS[m]?.label||m}: ${fmt(c.porMetodo[m])}</div>`).join('')}
+      </td>
       <td class="mono">${fmt(c.esperado)}</td>
       <td class="mono">${fmt(c.contado)}</td>
       <td class="mono" style="color:${c.diferencia<0?'var(--vino-suave)':c.diferencia>0?'var(--oro-suave)':'var(--salvia-suave)'}">${c.diferencia===0?'Cuadrado':fmt(c.diferencia)}</td>
