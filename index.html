@@ -1106,6 +1106,17 @@ async function itemsDeVenta(ventaId){
 function fechaOracleAISO(v){ return v ? String(v).slice(0,10) : null; }
 /* Oracle (vía ORDS) exige formato ISO completo para columnas DATE al enviar por REST */
 function aOracleFecha(iso){ return iso ? iso + 'T00:00:00Z' : null; }
+/* variante que conserva la hora real (para registrar el momento exacto de un cierre de caja,
+   sin necesitar una columna nueva: la misma columna DATE de Oracle ya soporta hora) */
+function aOracleFechaHora(d){
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+/* extrae HH:MM de un valor de fecha/hora devuelto por Oracle, si trae hora */
+function horaDeValorFecha(v){
+  const s = String(v||'');
+  return s.length>=16 ? s.slice(11,16) : '';
+}
 
 /* =========================================================
    CARGA / GUARDADO — todo vive en Oracle ahora, esto solo sincroniza
@@ -1142,7 +1153,7 @@ async function cargarDatos(){
       cierres: cierresRows.map(c=>{
         const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
         cierreMetodosRows.filter(x=>x.cierre_id===c.id).forEach(x=>{ porMetodo[x.metodo] = Number(x.total); });
-        return { id:c.id, fecha:fechaOracleAISO(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas),
+        return { id:c.id, fecha:fechaOracleAISO(c.fecha), horaCierre: horaDeValorFecha(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas),
           totalIngresos: Number(c.total_ingresos||0), totalEgresos: Number(c.total_egresos||0),
           esperado:Number(c.esperado), contado:Number(c.contado), diferencia:Number(c.diferencia) };
       })
@@ -1265,7 +1276,9 @@ function renderResumen(){
     <div class="txt"><b>${bajos.length} insumo${bajos.length>1?'s':''}</b> con poco stock: ${bajos.slice(0,4).map(b=>b.nombre).join(', ')}${bajos.length>4?'…':''}</div>
     <button onclick="cambiarVista('inventario')">Ver inventario →</button></div>` : '';
 
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy);
+  /* mientras la caja siga abierta, "hoy" incluye desde que se abrió (aunque haya cambiado el día calendario) */
+  const desdeResumen = (CAJA.estado.abierta && CAJA.estado.fechaApertura) ? CAJA.estado.fechaApertura : hoy;
+  const ventasHoy = CAJA.ventas.filter(v=>v.fecha>=desdeResumen);
   const ventasHoyValidas = ventasHoy.filter(v=>v.estado!=='anulada');
   const totalHoy = ventasHoyValidas.reduce((a,v)=>a+v.total,0);
   document.getElementById('stat-ventas-total').textContent = fmt(totalHoy);
@@ -1331,10 +1344,13 @@ setInterval(renderRecordatoriosReservas, 5*60*1000);
 function renderTurnosHoy(){
   const cont = document.getElementById('turnos-hoy-lista');
   if(!cont) return;
+  /* mientras la caja esté abierta, se muestran todos los turnos de la jornada actual
+     (desde que se abrió la caja), aunque hayan pasado la medianoche */
   const hoy = hoyISO();
-  const turnosHoy = CAJA.turnos.filter(t=>t.fecha===hoy).sort((a,b)=>a.tsInicio-b.tsInicio);
-  cont.innerHTML = turnosHoy.length ? turnosHoy.map(t=>`
-    <div class="fila-simple"><span class="n">${t.cajero}</span><span class="p">${t.horaInicio} – ${t.horaFin || 'en curso'}</span></div>`).join('') : '<div class="vacio">Aún no hay turnos hoy</div>';
+  const desde = (CAJA.estado.abierta && CAJA.estado.fechaApertura) ? CAJA.estado.fechaApertura : hoy;
+  const turnosSesion = CAJA.turnos.filter(t=>t.fecha>=desde).sort((a,b)=>a.tsInicio-b.tsInicio);
+  cont.innerHTML = turnosSesion.length ? turnosSesion.map(t=>`
+    <div class="fila-simple"><span class="n">${t.cajero}${t.fecha!==hoy ? ' · '+fechaCorta(t.fecha) : ''}</span><span class="p">${t.horaInicio} – ${t.horaFin || 'en curso'}</span></div>`).join('') : '<div class="vacio">Aún no hay turnos en esta jornada</div>';
 }
 function estadoMesaAhora(n){
   const ocupada = CAJA.ventas.some(v=>v.estado==='pendiente' && v.mesa===n);
@@ -1651,8 +1667,9 @@ function renderCaja(){
 }
 /* turno = un tramo de tiempo en que una persona específica atendió la caja */
 function turnoAbiertoHoy(){
-  const hoy = hoyISO();
-  return CAJA.turnos.find(t=>t.fecha===hoy && t.horaFin===null) || null;
+  /* no filtramos por fecha: mientras la caja siga abierta solo puede haber un turno
+     sin horaFin, sin importar si empezó "ayer" (antes de medianoche) */
+  return CAJA.turnos.find(t=>t.horaFin===null) || null;
 }
 async function abrirTurno(cajero){
   const hoy = hoyISO();
@@ -1669,8 +1686,9 @@ async function cerrarTurnoAbierto(){
   await oUpdate('turnos', abierto.id, { id:abierto.id, fecha:aOracleFecha(abierto.fecha), cajero:abierto.cajero, hora_inicio:abierto.horaInicio, hora_fin:abierto.horaFin, ts_inicio:abierto.tsInicio, ts_fin:abierto.tsFin });
 }
 
-/* movimientos de caja externos a ventas: ingresos y egresos manuales */
-function movimientosHoy(){ const hoy = hoyISO(); return CAJA.movimientos.filter(m=>m.fecha===hoy && !m.cerrada); }
+/* movimientos de caja externos a ventas: ingresos y egresos manuales.
+   ya no se filtran por fecha calendario, sino por si ya quedaron incluidos en un cierre anterior (cerrada) */
+function movimientosHoy(){ return CAJA.movimientos.filter(m=>!m.cerrada); }
 function totalIngresosHoy(){ return movimientosHoy().filter(m=>m.tipo==='ingreso').reduce((a,m)=>a+m.monto,0); }
 function totalEgresosHoy(){ return movimientosHoy().filter(m=>m.tipo==='egreso').reduce((a,m)=>a+m.monto,0); }
 function abrirModalMovimiento(tipo){
@@ -1753,42 +1771,48 @@ async function cambiarCajero(){
 function confirmarCierre(){
   const contado = document.getElementById('input-contado').value;
   if(contado === ''){ mostrarToast('Ingresa el efectivo contado antes de cerrar'); return; }
-  const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
-  const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  /* todo lo que aún no se haya incluido en un cierre anterior cuenta para este cierre,
+     sin importar si algunas ventas quedaron fechadas "ayer" por trabajar pasada la medianoche */
+  const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
+  const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
   const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   const diff = toNum(contado) - esperado;
   const msg = diff===0
-    ? '¿Cerrar la caja del día? El efectivo contado cuadra exacto con lo esperado.'
+    ? '¿Cerrar la caja de esta jornada? El efectivo contado cuadra exacto con lo esperado.'
     : diff>0
-      ? `¿Cerrar la caja del día? Hay ${fmt(diff)} de sobra respecto a lo esperado. Las ventas de hoy quedarán archivadas y no se podrán anular después.`
-      : `¿Cerrar la caja del día? Faltan ${fmt(Math.abs(diff))} respecto a lo esperado. Las ventas de hoy quedarán archivadas y no se podrán anular después.`;
+      ? `¿Cerrar la caja de esta jornada? Hay ${fmt(diff)} de sobra respecto a lo esperado. Las ventas de esta jornada quedarán archivadas y no se podrán anular después.`
+      : `¿Cerrar la caja de esta jornada? Faltan ${fmt(Math.abs(diff))} respecto a lo esperado. Las ventas de esta jornada quedarán archivadas y no se podrán anular después.`;
   confirmar(msg, cerrarCaja);
 }
 async function cerrarCaja(){
+  const ahora = new Date();
   const hoy = hoyISO();
   const contado = toNum(document.getElementById('input-contado').value);
   try{
-    const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
+    /* se incluyen TODAS las ventas pagadas aún no cerradas, sin importar su fecha calendario:
+       así, si se trabajó pasada la medianoche, nada de lo vendido en esas "2 fechas" se pierde ni se corta */
+    const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
     const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
-    ventasHoy.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
-    const ingresosHoy = totalIngresosHoy(), egresosHoy = totalEgresosHoy();
-    const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0) + ingresosHoy - egresosHoy;
+    ventasPend.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
+    const ingresosPend = totalIngresosHoy(), egresosPend = totalEgresosHoy();
+    const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0) + ingresosPend - egresosPend;
     const cierreId = uid('c');
-    await oInsert('cierres', { id:cierreId, fecha:aOracleFecha(hoy), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
-      total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), total_ingresos: ingresosHoy, total_egresos: egresosHoy, esperado, contado, diferencia: contado-esperado });
+    /* se guarda el momento EXACTO (fecha y hora reales) en que se cerró la caja, para poder
+       mostrar "cerró tal día a tal hora" en el historial, incluso si eso ocurrió después de medianoche */
+    await oInsert('cierres', { id:cierreId, fecha:aOracleFechaHora(ahora), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
+      total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), total_ingresos: ingresosPend, total_egresos: egresosPend, esperado, contado, diferencia: contado-esperado });
     for(const m of Object.keys(porMetodo)){
       await oInsert('cierre_metodos', { id:uid('cm'), cierre_id:cierreId, metodo:m, total: porMetodo[m] });
     }
-    for(const v of ventasHoy){
+    for(const v of ventasPend){
       await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
         descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
         descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
         total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada' });
       v.cerrada = true;
     }
-    CAJA.cierres.push({ id:cierreId, fecha:hoy, cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
-      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosHoy, totalEgresos: egresosHoy, esperado, contado, diferencia: contado-esperado });
+    CAJA.cierres.push({ id:cierreId, fecha:hoy, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
+      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosPend, totalEgresos: egresosPend, esperado, contado, diferencia: contado-esperado });
     for(const m of movimientosHoy()){
       await oUpdate('movimientos_caja', m.id, { id:m.id, fecha:aOracleFecha(m.fecha), tipo:m.tipo, monto:m.monto, motivo:m.motivo, cajero:m.cajero, ts:m.ts, cerrada:1 });
       m.cerrada = true;
@@ -1802,12 +1826,12 @@ async function cerrarCaja(){
   }catch(e){ console.error(e); mostrarToast('No se pudo cerrar la caja: revisa la conexión con Oracle'); }
 }
 function renderCierrePreview(){
-  const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
-  const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
-  const totalTodosMetodos = ventasHoy.reduce((a,v)=>a+v.total,0);
+  /* todo lo pendiente de cerrar, sin filtrar por fecha calendario */
+  const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
+  const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  const totalTodosMetodos = ventasPend.reduce((a,v)=>a+v.total,0);
   const porMetodoHoy = {}; Object.keys(METODOS).forEach(m=>porMetodoHoy[m]=0);
-  ventasHoy.forEach(v=>{ porMetodoHoy[v.metodo] = (porMetodoHoy[v.metodo]||0) + v.total; });
+  ventasPend.forEach(v=>{ porMetodoHoy[v.metodo] = (porMetodoHoy[v.metodo]||0) + v.total; });
   const desglose = document.getElementById('cierre-desglose-metodos');
   desglose.innerHTML = Object.keys(METODOS).filter(m=>m!=='efectivo').map(m=>`
     <div class="fila-simple" style="opacity:.55; padding-left:14px; font-size:.8rem;"><span class="n">${METODOS[m].label}</span><span class="p mono">${fmt(porMetodoHoy[m])}</span></div>`).join('');
@@ -1824,9 +1848,9 @@ function calcularDiferencia(){
   const box = document.getElementById('diferencia-box');
   const contadoStr = document.getElementById('input-contado').value;
   if(contadoStr===''){ box.innerHTML=''; return; }
-  const hoy = hoyISO();
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha===hoy && !v.cerrada && v.estado==='pagada');
-  const efectivo = ventasHoy.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  /* todo lo pendiente de cerrar, sin filtrar por fecha calendario */
+  const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
+  const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
   const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   const contado = toNum(contadoStr);
   const diff = contado - esperado;
@@ -2478,7 +2502,7 @@ function renderCierresAnteriores(){
   const body = document.getElementById('tabla-cierres-body');
   body.innerHTML = cierres.length ? cierres.map(c=>`
     <tr>
-      <td class="mono">${fechaCorta(c.fecha)}</td>
+      <td class="mono">${fechaCorta(c.fecha)}${c.horaCierre?(' · '+c.horaCierre):''}</td>
       <td>${c.cajero||'—'}</td>
       <td class="mono">${fmt(c.apertura)}</td>
       <td class="mono">${fmt(c.totalVentas)}</td>
@@ -2497,7 +2521,7 @@ function imprimirCierre(c){
   el.innerHTML = `
     <h4>CAFÉ REAL</h4>
     <div class="centrado">Cierre de caja</div>
-    <div class="centrado">${fechaCorta(c.fecha)} · ${c.cajero||'—'}</div>
+    <div class="centrado">${fechaCorta(c.fecha)}${c.horaCierre?(' · '+c.horaCierre):''} · ${c.cajero||'—'}</div>
     <div class="ri-linea"></div>
     <div class="ri-fila"><span>Base inicial</span><span>${fmt(c.apertura)}</span></div>
     ${Object.keys(c.porMetodo||{}).map(m=>`<div class="ri-fila"><span>${METODOS[m]?.label||m}</span><span>${fmt(c.porMetodo[m])}</span></div>`).join('')}
@@ -2518,7 +2542,7 @@ function imprimirCierre(c){
 function verDetalleCierre(c){
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="overlay"><div class="modal-box">
-    <h3>Cierre del ${fechaCorta(c.fecha)}${c.cajero ? ' · '+c.cajero : ''}</h3>
+    <h3>Cierre del ${fechaCorta(c.fecha)}${c.horaCierre?(' · '+c.horaCierre):''}${c.cajero ? ' · '+c.cajero : ''}</h3>
     <div class="fila-simple"><span class="n">Base inicial</span><span class="p mono">${fmt(c.apertura)}</span></div>
     ${Object.keys(c.porMetodo||{}).filter(m=>c.porMetodo[m]>0).map(m=>`
       <div class="fila-simple"><span class="n">${METODOS[m]?.label||m}</span><span class="p mono">${fmt(c.porMetodo[m])}</span></div>`).join('')}
