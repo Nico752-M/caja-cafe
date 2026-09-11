@@ -1153,7 +1153,7 @@ async function cargarDatos(){
       cierres: cierresRows.map(c=>{
         const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
         cierreMetodosRows.filter(x=>x.cierre_id===c.id).forEach(x=>{ porMetodo[x.metodo] = Number(x.total); });
-        return { id:c.id, fecha:fechaOracleAISO(c.fecha), horaCierre: horaDeValorFecha(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas),
+        return { id:c.id, fecha:fechaOracleAISO(c.fecha), fechaApertura: fechaOracleAISO(c.fecha_apertura), horaCierre: horaDeValorFecha(c.fecha), cajero:c.cajero, apertura:Number(c.apertura), porMetodo, totalVentas:Number(c.total_ventas),
           totalIngresos: Number(c.total_ingresos||0), totalEgresos: Number(c.total_egresos||0),
           esperado:Number(c.esperado), contado:Number(c.contado), diferencia:Number(c.diferencia) };
       })
@@ -1799,9 +1799,9 @@ async function cerrarCaja(){
     const cierreId = uid('c');
     /* se guarda el momento EXACTO (fecha y hora reales) en que se cerró la caja, para poder
        mostrar "cerró tal día a tal hora" en el historial, incluso si eso ocurrió después de medianoche */
-    await oInsert('cierres', { id:cierreId, fecha:aOracleFechaHora(ahora), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
+    await oInsert('cierres', { id:cierreId, fecha:aOracleFechaHora(ahora), fecha_apertura: aOracleFecha(CAJA.estado.fechaApertura), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
       total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), total_ingresos: ingresosPend, total_egresos: egresosPend, esperado, contado, diferencia: contado-esperado });
-    for(const m of Object.keys(porMetodo)){
+      for(const m of Object.keys(porMetodo)){
       await oInsert('cierre_metodos', { id:uid('cm'), cierre_id:cierreId, metodo:m, total: porMetodo[m] });
     }
     for(const v of ventasPend){
@@ -1811,9 +1811,9 @@ async function cerrarCaja(){
         total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada' });
       v.cerrada = true;
     }
-    CAJA.cierres.push({ id:cierreId, fecha:hoy, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
+    CAJA.cierres.push({ id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
       totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosPend, totalEgresos: egresosPend, esperado, contado, diferencia: contado-esperado });
-    for(const m of movimientosHoy()){
+      for(const m of movimientosHoy()){
       await oUpdate('movimientos_caja', m.id, { id:m.id, fecha:aOracleFecha(m.fecha), tipo:m.tipo, monto:m.monto, motivo:m.motivo, cajero:m.cajero, ts:m.ts, cerrada:1 });
       m.cerrada = true;
     }
@@ -2502,7 +2502,7 @@ function renderCierresAnteriores(){
   const body = document.getElementById('tabla-cierres-body');
   body.innerHTML = cierres.length ? cierres.map(c=>`
     <tr>
-      <td class="mono">${fechaCorta(c.fecha)}${c.horaCierre?(' · '+c.horaCierre):''}</td>
+      <td class="mono">${c.fechaApertura && c.fechaApertura!==c.fecha ? (fechaCorta(c.fechaApertura)+' → '+fechaCorta(c.fecha)) : fechaCorta(c.fecha)}${c.horaCierre?(' · '+c.horaCierre):''}</td>
       <td>${c.cajero||'—'}</td>
       <td class="mono">${fmt(c.apertura)}</td>
       <td class="mono">${fmt(c.totalVentas)}</td>
