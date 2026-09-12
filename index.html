@@ -1110,7 +1110,7 @@ function aOracleFecha(iso){ return iso ? iso + 'T00:00:00Z' : null; }
    sin necesitar una columna nueva: la misma columna DATE de Oracle ya soporta hora) */
 function aOracleFechaHora(d){
   const pad = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}Z`;
 }
 /* extrae HH:MM de un valor de fecha/hora devuelto por Oracle, si trae hora */
 function horaDeValorFecha(v){
