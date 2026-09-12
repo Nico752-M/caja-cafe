@@ -31,9 +31,10 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--oro);}
 .hidden{display:none !important;}
 
 /* ---------------- topbar ---------------- */
-.topbar{position:sticky; top:0; z-index:80; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 20px; background:rgba(21,18,14,.95); backdrop-filter:blur(8px); border-bottom:1px solid var(--linea);}
+.topbar{position:sticky; top:0; z-index:80; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 20px; background:rgba(247,244,236,.95); backdrop-filter:blur(8px); border-bottom:1px solid var(--linea);}
 .brand{display:flex; align-items:center; gap:10px; flex:0 0 auto;}
-.brand .mark{width:32px; height:32px; border-radius:50%; border:1px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:700; color:var(--oro); font-size:.85rem;}
+.brand .mark{width:32px; height:32px; border-radius:50%; border:1px solid var(--linea-fuerte); display:flex; align-items:center; justify-content:center; font-family:'Fraunces',serif; font-weight:700; color:var(--oro); font-size:.85rem; overflow:hidden;}
+.brand .mark img{width:100%; height:100%; object-fit:cover; border-radius:50%;}
 .brand strong{font-family:'Fraunces',serif; font-weight:600; font-size:1.02rem;}
 .brand small{display:block; font-size:.58rem; letter-spacing:.22em; text-transform:uppercase; color:var(--concreto); margin-top:1px;}
 .tabs{display:flex; gap:4px; background:var(--panel); border:1px solid var(--linea); border-radius:10px; padding:4px; overflow-x:auto; scrollbar-width:none; flex:1; min-width:0;}
@@ -460,7 +461,7 @@ textarea{resize:vertical; min-height:56px;}
 
 <div class="topbar">
   <div class="brand">
-    <div class="mark">CR</div>
+    <div class="mark"><img src="images/logo.png" alt="Café Real" onerror="this.style.display='none'; this.parentElement.textContent='CR';"></div>
     <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span> · <span style="opacity:.4;">v1.1</span></small></div>
   </div>
   <div class="tabs" id="tabs">
