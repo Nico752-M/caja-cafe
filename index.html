@@ -1286,7 +1286,9 @@ function renderResumen(){
 
   /* mientras la caja siga abierta, "hoy" incluye desde que se abrió (aunque haya cambiado el día calendario) */
   const desdeResumen = (CAJA.estado.abierta && CAJA.estado.fechaApertura) ? CAJA.estado.fechaApertura : hoy;
-  const ventasHoy = CAJA.ventas.filter(v=>v.fecha>=desdeResumen);
+  const ventasHoy = CAJA.estado.abierta
+  ? CAJA.ventas.filter(v=>v.fecha>=desdeResumen && !v.cerrada)
+  : [];
   const ventasHoyValidas = ventasHoy.filter(v=>v.estado!=='anulada');
   const totalHoy = ventasHoyValidas.reduce((a,v)=>a+v.total,0);
   document.getElementById('stat-ventas-total').textContent = fmt(totalHoy);
@@ -2974,7 +2976,7 @@ function setRangoStats(r){
 function ventasEnRango(){
   const hoy = fechaOperativa();
   const pagadas = CAJA.ventas.filter(v=>v.estado==='pagada');
-  if(rangoStats==='hoy') return pagadas.filter(v=>v.fecha===hoy);
+  if(rangoStats==='hoy') return CAJA.estado.abierta ? pagadas.filter(v=>v.fecha===hoy && !v.cerrada) : [];
   if(rangoStats==='semana'){
     const limite = Date.now() - 7*24*60*60*1000;
     return pagadas.filter(v=>v.ts >= limite);
