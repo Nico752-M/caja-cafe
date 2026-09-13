@@ -1056,6 +1056,13 @@ function hayChoqueMesas(mesas, fecha, horaIni, horaFin, excluirId){
   return null;
 }
 
+/* fecha "de negocio": mientras la caja siga abierta, todo lo nuevo (ventas, turnos, movimientos)
+   se fecha con el día en que se abrió esa caja, aunque ya haya pasado la medianoche.
+   Solo se usa la fecha real del calendario si la caja está cerrada (ej: al abrir una caja nueva). */
+function fechaOperativa(){
+  return (CAJA.estado.abierta && CAJA.estado.fechaApertura) ? CAJA.estado.fechaApertura : hoyISO();
+}
+
 function hoyISO(){
   const d = new Date();
   const y = d.getFullYear();
@@ -1268,7 +1275,7 @@ function stockDisponibleParaProducto(prod){
    RESUMEN
    ========================================================= */
 function renderResumen(){
-  const hoy = hoyISO();
+  const hoy = fechaOperativa();
   document.getElementById('resumen-fecha').textContent = new Date().toLocaleDateString('es-CO',{weekday:'long', day:'numeric', month:'long'});
 
   const bajos = insumosBajos();
@@ -1467,7 +1474,7 @@ async function confirmarCobroPendiente(){
   const recibido = metodo==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : v.total) : null;
   if(metodo==='efectivo' && recibido < v.total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
   const cambio = recibido!==null ? recibido - v.total : null;
-  const fechaCobro = hoyISO();
+  const fechaCobro = fechaOperativa();
   const horaCobro = ahoraStr();
   const tsCobro = Date.now();
   try{
@@ -1663,7 +1670,7 @@ function renderCaja(){
     <button onclick="cambiarVista('inventario')">Ir a inventario →</button></div>` : '';
 
   buildCatPills(); buildItemGrid(); renderPedido(); renderTurnosHoy(); renderMesasGrid(); renderPedidosPendientes(); renderPedidosAnulados(); renderMovimientosCaja();
-  if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = hoyISO();
+  if(!document.getElementById('hist-fecha').value) document.getElementById('hist-fecha').value = fechaOperativa();
   renderHistorialVentas(); renderCierrePreview(); renderCierresAnteriores();
 }
 /* turno = un tramo de tiempo en que una persona específica atendió la caja */
@@ -1673,7 +1680,7 @@ function turnoAbiertoHoy(){
   return CAJA.turnos.find(t=>t.horaFin===null) || null;
 }
 async function abrirTurno(cajero){
-  const hoy = hoyISO();
+  const hoy = fechaOperativa();
   const t = { id: uid('t'), fecha: hoy, cajero, horaInicio: ahoraStr(), horaFin: null, tsInicio: Date.now(), tsFin: null };
   await oInsert('turnos', { id:t.id, fecha:aOracleFecha(t.fecha), cajero:t.cajero, hora_inicio:t.horaInicio, hora_fin:null, ts_inicio:t.tsInicio, ts_fin:null });
   CAJA.turnos.push(t);
@@ -1709,7 +1716,7 @@ async function confirmarMovimiento(tipo){
   const motivo = document.getElementById('mov-motivo').value.trim();
   if(monto<=0){ mostrarToast('Ingresa un monto válido'); return; }
   if(!motivo){ mostrarToast('Escribe el motivo del movimiento'); return; }
-  const mov = { id: uid('m'), fecha: hoyISO(), tipo, monto, motivo, cajero: CAJA.estado.cajero||null, ts: Date.now(), cerrada:false };
+  const mov = { id: uid('m'), fecha: fechaOperativa(), tipo, monto, motivo, cajero: CAJA.estado.cajero||null, ts: Date.now(), cerrada:false };
   try{
     await oInsert('movimientos_caja', { id:mov.id, fecha:aOracleFecha(mov.fecha), tipo:mov.tipo, monto:mov.monto, motivo:mov.motivo, cajero:mov.cajero, ts:mov.ts, cerrada:0 });
     CAJA.movimientos.push(mov);
@@ -2275,7 +2282,7 @@ async function dejarPendiente(){
   const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
   const mesaVal = document.getElementById('input-mesa').value;
   const venta = {
-    id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
+    id: uid('v'), ts: Date.now(), fecha: fechaOperativa(), hora: ahoraStr(), items, subtotal, total,
     descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
     servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: null, recibido: null, cambio: null,
@@ -2319,7 +2326,7 @@ async function cobrar(){
   const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
   const mesaVal = document.getElementById('input-mesa').value;
   const venta = {
-    id: uid('v'), ts: Date.now(), fecha: hoyISO(), hora: ahoraStr(), items, subtotal, total,
+    id: uid('v'), ts: Date.now(), fecha: fechaOperativa(), hora: ahoraStr(), items, subtotal, total,
     descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
     servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
@@ -2377,7 +2384,7 @@ function renderHistorialVentas(){
   const fechaInput = document.getElementById('hist-fecha');
   if(!fechaInput.value) fechaInput.value = hoyISO();
   const fecha = fechaInput.value;
-  const esHoy = fecha === hoyISO();
+  const esHoy = fecha === fechaOperativa();
   document.getElementById('hist-titulo').innerHTML = (esHoy ? 'Ventas de hoy' : 'Ventas del ' + fechaCorta(fecha)) + ' <span class="ver-todo" id="hist-count"></span>';
   const ventasDia = [...CAJA.ventas.filter(v=>v.fecha===fecha)].sort((a,b)=>b.ts-a.ts);
   document.getElementById('hist-count').textContent = ventasDia.length + (ventasDia.length===1?' venta':' ventas');
@@ -2465,7 +2472,7 @@ async function confirmarAnulacionVenta(){
 function renderPedidosAnulados(){
   const cont = document.getElementById('anulados-lista');
   if(!cont) return;
-  const hoy = hoyISO();
+  const hoy = fechaOperativa();
   const anuladasHoy = CAJA.ventas.filter(v=>v.estado==='anulada' && v.fecha===hoy).sort((a,b)=>(b.anuladaTs||0)-(a.anuladaTs||0));
   const badge = document.getElementById('badge-anulados');
   if(badge){ if(anuladasHoy.length){ badge.textContent = anuladasHoy.length; badge.classList.remove('hidden'); } else badge.classList.add('hidden'); }
@@ -2965,7 +2972,7 @@ function setRangoStats(r){
   renderEstadisticas();
 }
 function ventasEnRango(){
-  const hoy = hoyISO();
+  const hoy = fechaOperativa();
   const pagadas = CAJA.ventas.filter(v=>v.estado==='pagada');
   if(rangoStats==='hoy') return pagadas.filter(v=>v.fecha===hoy);
   if(rangoStats==='semana'){
