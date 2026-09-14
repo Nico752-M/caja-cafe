@@ -1156,7 +1156,10 @@ async function cargarDatos(){
         estado: v.estado || 'pagada',
         motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
         servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
-        items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) }))
+        items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) })),
+        fechaPago: v.fecha_pago ? fechaOracleAISO(v.fecha_pago) : null,
+        horaPago: v.hora_pago || null,
+        tsPago: v.ts_pago!=null ? Number(v.ts_pago) : null,
       })),
       cierres: cierresRows.map(c=>{
         const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
@@ -1468,6 +1471,7 @@ function calcularCambioPendiente(){
   line.className = 'cambio-line' + (cambio<0 ? ' neg' : '');
   line.innerHTML = `<span>Cambio a devolver</span><strong>${fmt(Math.abs(cambio))}</strong>`;
 }
+
 async function confirmarCobroPendiente(){
   const v = CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
   if(!v) return;
@@ -1481,20 +1485,22 @@ async function confirmarCobroPendiente(){
   const tsCobro = Date.now();
   try{
     await oUpdate('ventas', v.id, {
-      id:v.id, fecha:aOracleFecha(fechaCobro), hora:horaCobro, ts:tsCobro, subtotal:v.subtotal,
+      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
       servicio_porcentaje: v.servicioPorcentaje, servicio_monto: v.servicioMonto||0,
-      total:v.total, metodo, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada'
+      total:v.total, metodo, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada',
+      fecha_pago:aOracleFecha(fechaCobro), hora_pago:horaCobro, ts_pago:tsCobro
     });
-    v.fecha = fechaCobro; v.hora = horaCobro; v.ts = tsCobro;
     v.metodo = metodo; v.recibido = recibido; v.cambio = cambio; v.estado = 'pagada';
+    v.fechaPago = fechaCobro; v.horaPago = horaCobro; v.tsPago = tsCobro;
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Cuenta cobrada · ' + fmt(v.total));
     imprimirVenta(v);
     renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){ console.error(e); mostrarToast('No se pudo registrar el cobro en Oracle'); }
 }
+
 function abrirModalDetallePendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
@@ -1650,7 +1656,8 @@ async function guardarDetallePendiente(){
       descuento_tipo: descAGuardar?descAGuardar.tipo:null, descuento_valor: descAGuardar?descAGuardar.valor:null,
       descuento_motivo: descAGuardar?descAGuardar.motivo:null, descuento_monto: descAGuardar?descAGuardar.monto:0,
       servicio_porcentaje: montoServ>0?serv.porcentaje:null, servicio_monto: montoServ,
-      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente'
+      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente',
+      fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
     v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
     v.servicioPorcentaje = montoServ>0 ? serv.porcentaje : null; v.servicioMonto = montoServ;
@@ -1781,8 +1788,19 @@ async function cambiarCajero(){
 function confirmarCierre(){
   const contado = document.getElementById('input-contado').value;
   if(contado === ''){ mostrarToast('Ingresa el efectivo contado antes de cerrar'); return; }
-  /* todo lo que aún no se haya incluido en un cierre anterior cuenta para este cierre,
-     sin importar si algunas ventas quedaron fechadas "ayer" por trabajar pasada la medianoche */
+  const pendientesSinPagar = pedidosPendientes();
+  if(pendientesSinPagar.length){
+    const totalPend = pendientesSinPagar.reduce((a,v)=>a+v.total,0);
+    const msgAviso = `Hay ${pendientesSinPagar.length} comanda(s) sin cobrar por ${fmt(totalPend)}. ` +
+      `Si cierras ahora, esas comandas quedarán guardadas y se podrán cobrar después, pero el dinero se contará en la caja que abras ` +
+      `la próxima vez, no en la de hoy. ¿Quieres cerrar de todas formas?`;
+    confirmar(msgAviso, () => confirmarCierreFinal());
+    return;
+  }
+  confirmarCierreFinal();
+}
+function confirmarCierreFinal(){
+  const contado = document.getElementById('input-contado').value;
   const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
   const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
   const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
@@ -1799,16 +1817,12 @@ async function cerrarCaja(){
   const hoy = hoyISO();
   const contado = toNum(document.getElementById('input-contado').value);
   try{
-    /* se incluyen TODAS las ventas pagadas aún no cerradas, sin importar su fecha calendario:
-       así, si se trabajó pasada la medianoche, nada de lo vendido en esas "2 fechas" se pierde ni se corta */
     const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
     const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
     ventasPend.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
     const ingresosPend = totalIngresosHoy(), egresosPend = totalEgresosHoy();
     const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0) + ingresosPend - egresosPend;
     const cierreId = uid('c');
-    /* se guarda el momento EXACTO (fecha y hora reales) en que se cerró la caja, para poder
-       mostrar "cerró tal día a tal hora" en el historial, incluso si eso ocurrió después de medianoche */
     await oInsert('cierres', { id:cierreId, fecha:aOracleFechaHora(ahora), fecha_apertura: aOracleFecha(CAJA.estado.fechaApertura), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura,
       total_ventas: Object.values(porMetodo).reduce((a,b)=>a+b,0), total_ingresos: ingresosPend, total_egresos: egresosPend, esperado, contado, diferencia: contado-esperado });
       for(const m of Object.keys(porMetodo)){
@@ -1818,7 +1832,8 @@ async function cerrarCaja(){
       await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
         descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
         descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada' });
+        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada',
+        fecha_pago: aOracleFecha(v.fechaPago), hora_pago: v.horaPago, ts_pago: v.tsPago });
       v.cerrada = true;
     }
     const nuevoCierre = { id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
@@ -1837,6 +1852,7 @@ async function cerrarCaja(){
     mostrarModalCierreExitoso(nuevoCierre);
   }catch(e){ console.error(e); mostrarToast('No se pudo cerrar la caja: revisa la conexión con Oracle'); }
 }
+
 function mostrarModalCierreExitoso(c){
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="overlay"><div class="modal-box">
@@ -2241,6 +2257,7 @@ function iniciarAgregarAPendiente(id){
   buildItemGrid(); renderPedido();
   window.scrollTo({top:0, behavior:'smooth'});
 }
+
 async function confirmarAgregarAPendiente(){
   const id = pedidoPendienteEditando;
   const v = CAJA.ventas.find(x=>x.id===id);
@@ -2259,7 +2276,8 @@ async function confirmarAgregarAPendiente(){
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoSubtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente'
+      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente',
+      fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
     await descontarInventarioEnOracle(nuevosItems);
     v.items = v.items.concat(nuevosItems);
@@ -2273,6 +2291,7 @@ async function confirmarAgregarAPendiente(){
     document.getElementById('btn-agregar-a-pendiente').disabled = false;
   }
 }
+
 async function dejarPendiente(){
   const keys = Object.keys(pedido);
   if(!keys.length) return;
@@ -2290,7 +2309,8 @@ async function dejarPendiente(){
     metodo: null, recibido: null, cambio: null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
     cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null,
-    estado: 'pendiente'
+    estado: 'pendiente',
+    fechaPago: null, horaPago: null, tsPago: null
   };
   document.getElementById('btn-dejar-pendiente').disabled = true;
   try{
@@ -2299,7 +2319,8 @@ async function dejarPendiente(){
       descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
       descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
       servicio_porcentaje: venta.servicioPorcentaje, servicio_monto: venta.servicioMonto||0,
-      total:venta.total, metodo:null, recibido:null, cambio:null, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pendiente'
+      total:venta.total, metodo:null, recibido:null, cambio:null, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pendiente',
+      fecha_pago:null, hora_pago:null, ts_pago:null
     });
     for(const it of items){
       await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
@@ -2333,7 +2354,8 @@ async function cobrar(){
     servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
-    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null, estado:'pagada'
+    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null, estado:'pagada',
+    fechaPago: fechaOperativa(), horaPago: ahoraStr(), tsPago: Date.now()
   };
   document.getElementById('btn-cobrar').disabled = true;  
   try{
@@ -2342,7 +2364,8 @@ async function cobrar(){
       descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
       descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
       servicio_porcentaje: venta.servicioPorcentaje, servicio_monto: venta.servicioMonto||0,
-      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pagada'
+      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pagada',
+      fecha_pago:aOracleFecha(venta.fechaPago), hora_pago:venta.horaPago, ts_pago:venta.tsPago
     });
     for(const it of items){
       await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
@@ -2400,6 +2423,7 @@ function renderHistorialVentas(){
         ${v.motivoAnulacion ? `<br><span style="color:var(--vino-suave); font-size:.74rem;">Anulada: ${v.motivoAnulacion}</span>` : ''}
         ${v.nota?`<br><span style="color:var(--concreto); font-size:.74rem;">${v.nota}</span>`:''}
         ${v.cajero?`<br><span style="color:var(--concreto); font-size:.7rem;">Atendió: ${v.cajero}</span>`:''}
+        ${v.fechaPago && v.fechaPago!==v.fecha ? `<br><span style="color:var(--oro-suave); font-size:.7rem;">Pagado el ${fechaCorta(v.fechaPago)}${v.horaPago?(' · '+v.horaPago):''}</span>` : ''}
       </td>
       <td>${v.estado==='pendiente' ? '<span class="tag" style="background:rgba(211,162,78,.16); color:var(--oro-suave);">Pendiente</span>' : v.estado==='anulada' ? '<span class="tag" style="background:rgba(138,53,53,.22); color:var(--vino-suave); text-decoration:line-through;">Anulada</span>' : `<span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span>`}</td>
       <td class="mono">${fmt(v.total)}</td>
@@ -2448,6 +2472,7 @@ function abrirModalAnularVenta(id){
     </div>
   </div></div>`;
 }
+
 async function confirmarAnulacionVenta(){
   const motivo = document.getElementById('anular-motivo').value.trim();
   if(!motivo){ mostrarToast('Escribe el motivo de la anulación'); return; }
@@ -2463,7 +2488,8 @@ async function confirmarAnulacionVenta(){
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
       servicio_porcentaje: v.servicioPorcentaje, servicio_monto: v.servicioMonto||0,
       total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa,
-      estado:'anulada', motivo_anulacion: motivo, anulada_ts: ts, anulada_por: cajero
+      estado:'anulada', motivo_anulacion: motivo, anulada_ts: ts, anulada_por: cajero,
+      fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
     v.estado = 'anulada'; v.motivoAnulacion = motivo; v.anuladaTs = ts; v.anuladaPor = cajero;
     document.getElementById('modal-root').innerHTML = '';
@@ -2471,6 +2497,7 @@ async function confirmarAnulacionVenta(){
     renderCaja(); renderResumen(); renderEstadisticas(); actualizarBadgeInventario();
   }catch(e){ console.error(e); mostrarToast('No se pudo anular el pedido en Oracle'); }
 }
+
 function renderPedidosAnulados(){
   const cont = document.getElementById('anulados-lista');
   if(!cont) return;
