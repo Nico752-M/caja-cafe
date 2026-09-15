@@ -1155,7 +1155,7 @@ function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digi
 const ORACLE_BASE = 'https://g473fddcae420b1-cafereal.adb.sa-bogota-1.oraclecloudapps.com/ords/dev_usuario/';
 
 async function oFetch(path, options={}){
-  const opts = { ...options, headers:{ 'Accept':'application/json', ...(options.headers||{}) } };
+  const opts = { ...options, cache:'no-store', headers:{ 'Accept':'application/json', 'Cache-Control':'no-cache', ...(options.headers||{}) } };
   if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
   if(opts.body) opts.headers['Content-Type'] = 'application/json';
   let r;
@@ -1170,7 +1170,7 @@ async function oFetch(path, options={}){
 async function oListAll(tabla){
   let items = [], offset = 0; const limit = 500;
   while(true){
-    const data = await oFetch(`${tabla}/?limit=${limit}&offset=${offset}`);
+    const data = await oFetch(`${tabla}/?limit=${limit}&offset=${offset}&_=${Date.now()}`);
     items = items.concat((data && data.items) || []);
     if(!data || !data.hasMore) break;
     offset += limit;
