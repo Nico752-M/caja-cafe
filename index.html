@@ -507,7 +507,78 @@ textarea{resize:vertical; min-height:56px;}
   #recibo-imprimible .ri-sub{text-align:center; font-size:9px; letter-spacing:.1em; margin-bottom:6px;}
   #recibo-imprimible .centrado{text-align:center; font-size:10px;}
   #recibo-imprimible .ri-total-final{font-size:13px; font-weight:bold; margin:4px 0;}
-  @page{ size: 80mm auto; margin: 2mm; }
+    @page{ size: 80mm auto; margin: 2mm; }
+}
+
+/* ============================================================
+   RESPONSIVE EXTRA — admin y mesero en celular/tablet
+   ============================================================ */
+
+/* Nadie hace scroll horizontal de la página completa;
+   el scroll horizontal intencional (tabs, cat-pills, riel-track,
+   inv-tabla-wrap) sigue funcionando porque ya tienen su propio
+   overflow-x:auto en un contenedor interno */
+html,body{overflow-x:hidden; width:100%;}
+
+/* Evita el zoom automático de iOS al enfocar un input */
+@media (max-width:600px){
+  input,select,textarea{font-size:16px;}
+}
+
+/* Layout general más compacto en tablets/phablets */
+@media (max-width:760px){
+  main{padding:16px 12px 90px;}
+  .titulo-vista{font-size:1.3rem; margin-bottom:14px;}
+  .stat-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px;}
+  .stat-card{padding:14px;}
+  .stat-card .valor{font-size:1.32rem;}
+}
+
+/* El carrito (recibo) deja de "flotar" y fluye con la página
+   cuando caja-layout ya bajó a una sola columna */
+@media (max-width:980px){
+  .recibo{position:static; max-height:none; top:auto;}
+  .recibo-lista{max-height:38vh;}
+}
+
+/* Cuadrículas de productos/insumos/mesas más chicas en celular */
+@media (max-width:600px){
+  .item-grid{grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:8px;}
+  .item-tile{padding:8px;}
+  .item-tile .nom{font-size:.78rem;}
+  .prod-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;}
+  .mesas-grid{grid-template-columns:repeat(auto-fill,minmax(54px,1fr)); gap:8px;}
+  .qty-ctrl button{width:26px; height:26px;}
+}
+
+/* Formularios en rejilla: se apilan en pantallas angostas */
+@media (max-width:480px){
+  .campo-row{grid-template-columns:1fr;}
+  .metodo-row{grid-template-columns:1fr 1fr; gap:6px;}
+  .receta-row{grid-template-columns:1fr 70px 26px;}
+  .add-insumo-form{grid-template-columns:1fr;}
+  .caja-cerrada{margin:6vh auto; padding:30px 20px;}
+}
+
+/* Modales: menos relleno y mejor uso del alto disponible en celular */
+@media (max-width:600px){
+  .overlay{padding:12px;}
+  .modal-box{padding:18px; max-width:100%;}
+  .modal-box.ancho{max-height:92vh;}
+  .modal-actions{flex-wrap:wrap;}
+}
+
+/* Comandas del riel un poco más angostas para ver más de un vistazo */
+@media (max-width:600px){
+  .comanda{width:128px;}
+}
+
+/* Topbar/tabs: toques más grandes y texto que no se corta en celular */
+@media (max-width:480px){
+  .brand small{display:none;}
+  .tabs button{padding:8px 11px; font-size:.72rem;}
+  .icon-btn{width:38px; height:38px;}
+  .usuario-chip .rol{display:none;}
 }
 
 </style>
