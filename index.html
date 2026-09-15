@@ -54,6 +54,63 @@ input:focus,select:focus,textarea:focus{outline:none; border-color:var(--oro);}
 #loader span{font-size:.8rem; color:var(--concreto); letter-spacing:.04em;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
+/* ---------------- usuarios / roles ---------------- */
+.solo-mesero{display:none !important;}
+body.rol-mesero .solo-admin{display:none !important;}
+body.rol-mesero .solo-mesero{display:block !important;}
+body.rol-mesero #btn-dejar-pendiente{background:var(--oro); color:var(--hierro); border-color:var(--oro);}
+body.rol-mesero .riel-wrap{order:-1;}
+
+.usuario-chip{display:flex; align-items:center; gap:8px; padding:5px 10px 5px 5px; border:1px solid var(--linea); border-radius:999px; cursor:pointer; flex:0 0 auto;}
+.usuario-chip:hover{border-color:var(--oro);}
+.usuario-chip .av{width:26px; height:26px; border-radius:50%; background:var(--oro); color:var(--hierro); display:flex; align-items:center; justify-content:center; font-size:.68rem; font-weight:700; letter-spacing:.02em;}
+.usuario-chip .txt{line-height:1.1; text-align:left;}
+.usuario-chip .nom{display:block; font-size:.76rem; font-weight:600;}
+.usuario-chip .rol{display:block; font-size:.56rem; letter-spacing:.16em; text-transform:uppercase; color:var(--concreto);}
+
+/* pantalla de ingreso */
+#login-overlay{position:fixed; inset:0; z-index:500; background:var(--hierro); display:flex; align-items:center; justify-content:center; padding:22px; overflow-y:auto;}
+.login-box{width:100%; max-width:380px; text-align:center;}
+.login-box .logo{width:58px; height:58px; border-radius:50%; border:1px solid var(--linea-fuerte); margin:0 auto 14px; display:flex; align-items:center; justify-content:center; overflow:hidden; font-family:'Fraunces',serif; font-weight:700; color:var(--oro);}
+.login-box .logo img{width:100%; height:100%; object-fit:cover;}
+.login-box h2{font-size:1.32rem; margin-bottom:4px;}
+.login-box .sub{font-size:.76rem; color:var(--concreto); letter-spacing:.04em; margin-bottom:22px;}
+.login-lista{display:grid; gap:10px;}
+.login-user{display:flex; align-items:center; gap:12px; width:100%; padding:14px 16px; background:var(--panel); border:1px solid var(--linea); border-radius:12px; text-align:left; transition:border-color .2s, transform .15s;}
+.login-user:hover{border-color:var(--oro); transform:translateY(-1px);}
+.login-user .av{width:38px; height:38px; border-radius:50%; background:var(--panel-2); border:1px solid var(--linea-fuerte); color:var(--oro-suave); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.82rem; flex:0 0 auto;}
+.login-user .nom{font-weight:600; font-size:.94rem; display:block;}
+.login-user .rol{font-size:.62rem; letter-spacing:.14em; text-transform:uppercase; color:var(--concreto);}
+.pin-puntos{display:flex; gap:12px; justify-content:center; margin:20px 0 22px;}
+.pin-punto{width:14px; height:14px; border-radius:50%; border:1.5px solid var(--linea-fuerte); transition:background .15s, border-color .15s;}
+.pin-punto.on{background:var(--oro); border-color:var(--oro);}
+.pin-pad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:280px; margin:0 auto;}
+.pin-pad button{padding:16px 0; background:var(--panel); border:1px solid var(--linea); border-radius:12px; font-size:1.18rem; font-family:'IBM Plex Mono',monospace; transition:border-color .2s;}
+.pin-pad button:hover{border-color:var(--oro);}
+.pin-pad button.gris{font-size:.8rem; font-family:'Public Sans',sans-serif; color:var(--concreto);}
+.login-error{font-size:.78rem; color:var(--vino-suave); min-height:18px; margin-top:14px;}
+.login-nota{font-size:.7rem; color:var(--concreto); margin-top:20px; line-height:1.5;}
+
+/* aviso de pedido nuevo (PC admin) */
+#aviso-nuevo-pedido{position:fixed; right:18px; bottom:18px; z-index:290; max-width:320px; background:var(--panel); border:1px solid var(--oro); border-left:4px solid var(--oro); border-radius:12px; padding:14px 16px; box-shadow:0 12px 30px rgba(3,73,68,.18); display:flex; gap:12px; align-items:flex-start; animation:entra-aviso .28s ease;}
+#aviso-nuevo-pedido .ico{font-size:1.2rem;}
+#aviso-nuevo-pedido .t{font-size:.86rem; font-weight:600; margin-bottom:2px;}
+#aviso-nuevo-pedido .d{font-size:.76rem; color:var(--concreto); line-height:1.4;}
+#aviso-nuevo-pedido .cerrar{margin-left:auto; color:var(--concreto); font-size:1rem; line-height:1;}
+@keyframes entra-aviso{from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:none;}}
+@keyframes latido-riel{0%,100%{box-shadow:none;} 40%{box-shadow:0 0 0 3px rgba(10,124,118,.35);}}
+.riel-wrap.nuevo{animation:latido-riel 1s ease 2;}
+.comanda.nueva .papel{box-shadow:0 0 0 2px var(--oro) inset;}
+@media (max-width:860px){ #aviso-nuevo-pedido{left:12px; right:12px; bottom:12px; max-width:none;} }
+
+/* usuarios: tabla del modal */
+.usuario-fila{display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--linea); text-align:left;}
+.usuario-fila:last-child{border-bottom:none;}
+.usuario-fila .av{width:32px; height:32px; border-radius:50%; background:var(--panel-2); border:1px solid var(--linea-fuerte); color:var(--oro-suave); display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; flex:0 0 auto;}
+.usuario-fila .info{flex:1; min-width:0;}
+.usuario-fila .info b{display:block; font-size:.88rem;}
+.usuario-fila .info small{font-size:.68rem; color:var(--concreto); letter-spacing:.1em; text-transform:uppercase;}
+
 /* respaldo */
 .respaldo-opcion{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 0; border-bottom:1px solid var(--linea);}
 .respaldo-opcion:last-child{border-bottom:none;}
@@ -465,15 +522,20 @@ textarea{resize:vertical; min-height:56px;}
     <div><strong>Café Real</strong><small>Caja &amp; Operación · <span style="opacity:.4;">NOVA</span> · <span style="opacity:.4;">v1.1</span></small></div>
   </div>
   <div class="tabs" id="tabs">
-    <button data-v="resumen" class="active" onclick="cambiarVista('resumen')">Resumen</button>
+    <button data-v="resumen" class="active solo-admin" onclick="cambiarVista('resumen')">Resumen</button>
     <button data-v="caja" onclick="cambiarVista('caja')">Caja</button>
-    <button data-v="productos" onclick="cambiarVista('productos')">Productos</button>
-    <button data-v="inventario" onclick="cambiarVista('inventario')">Inventario<span class="nav-badge hidden" id="badge-inventario">0</span></button>
-    <button data-v="reservas" onclick="cambiarVista('reservas')">Reservas</button>
-    <button data-v="estadisticas" onclick="cambiarVista('estadisticas')">Estadísticas</button>
+    <button data-v="productos" class="solo-admin" onclick="cambiarVista('productos')">Productos</button>
+    <button data-v="inventario" class="solo-admin" onclick="cambiarVista('inventario')">Inventario<span class="nav-badge hidden" id="badge-inventario">0</span></button>
+    <button data-v="reservas" class="solo-admin" onclick="cambiarVista('reservas')">Reservas</button>
+    <button data-v="estadisticas" class="solo-admin" onclick="cambiarVista('estadisticas')">Estadísticas</button>
   </div>
   <button class="icon-btn" onclick="sincronizarConOracle()" title="Sincronizar con Oracle">🔄</button>
-  <button class="icon-btn" onclick="abrirModalRespaldo()" title="Exportar / respaldo">⤓</button>
+  <button class="icon-btn solo-admin" onclick="abrirModalUsuarios()" title="Usuarios">👥</button>
+  <button class="icon-btn solo-admin" onclick="abrirModalRespaldo()" title="Exportar / respaldo">⤓</button>
+  <div class="usuario-chip" id="usuario-chip" onclick="abrirModalSesion()" title="Sesión">
+    <span class="av" id="usuario-avatar">—</span>
+    <span class="txt"><span class="nom" id="usuario-nombre">—</span><span class="rol" id="usuario-rol">—</span></span>
+  </div>
   <div class="reloj" id="reloj"><strong>--:--</strong><span id="reloj-fecha">--</span><span style="display:block; opacity:.35; letter-spacing:.15em; font-size:.6rem; margin-top:2px; transition:opacity .3s ease;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.35">NOVA</span></div>
 </div>
 
@@ -523,7 +585,14 @@ textarea{resize:vertical; min-height:56px;}
 
   <!-- ================= CAJA ================= -->
   <section class="view" id="view-caja">
-    <div id="caja-cerrada-box" class="caja-cerrada hidden">
+    <div id="caja-cerrada-mesero-box" class="caja-cerrada hidden solo-mesero">
+      <div class="icono">$</div>
+      <h2>La caja aún no está abierta</h2>
+      <p>Pídele al administrador que abra la caja en el computador. En cuanto la abra, esta pantalla se actualiza sola y podrás tomar pedidos.</p>
+      <button class="btn btn-outline btn-block" onclick="sincronizarConOracle()">Volver a revisar</button>
+    </div>
+
+    <div id="caja-cerrada-box" class="caja-cerrada hidden solo-admin">
       <div class="icono">$</div>
       <h2>La caja está cerrada</h2>
       <p>Antes de vender, registra el efectivo con el que abres la caja hoy. Así al cerrar podrás cuadrar sin adivinar.</p>
@@ -536,8 +605,8 @@ textarea{resize:vertical; min-height:56px;}
 
     <div id="caja-abierta-box" class="hidden">
       <div class="eyebrow">Punto de venta</div>
-      <h2 class="titulo-vista">Tomar pedido<button class="hamburguesa" id="btn-hamburguesa" onclick="toggleSidebarCaja()" aria-label="Abrir panel de caja"><span class="linea"></span><span class="linea"></span><span class="linea"></span></button></h2>
-      <div class="cajero-linea">Atiende: <b id="cajero-actual">—</b> <button onclick="cambiarCajero()">Cambiar</button></div>
+      <h2 class="titulo-vista">Tomar pedido<button class="hamburguesa solo-admin" id="btn-hamburguesa" onclick="toggleSidebarCaja()" aria-label="Abrir panel de caja"><span class="linea"></span><span class="linea"></span><span class="linea"></span></button></h2>
+      <div class="cajero-linea">Atiende: <b id="cajero-actual">—</b> <button class="solo-admin" onclick="cambiarCajero()">Cambiar</button></div>
       <div id="banner-agregar-pendiente" class="hidden" style="background:rgba(211,162,78,.14); border:1px solid var(--linea-fuerte); border-radius:12px; padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
         <span style="font-size:.86rem;">Agregando productos a <b id="banner-agregar-mesa" style="color:var(--oro-suave);"></b> · elige abajo solo lo nuevo</span>
         <button class="btn btn-outline btn-sm" onclick="vaciarPedido()">Cancelar</button>
@@ -568,8 +637,8 @@ textarea{resize:vertical; min-height:56px;}
           <div id="descuento-linea" class="hidden" style="display:flex; justify-content:space-between; font-size:.82rem; color:var(--vino-suave); margin:6px 0;">
             <span id="descuento-label">Descuento</span><span id="descuento-valor" class="mono">-$0</span>
           </div>
-          <button type="button" class="link-btn" id="btn-toggle-descuento" onclick="toggleDescuentoForm()">+ Descuento / cortesía</button>
-          <div id="descuento-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button type="button" class="link-btn solo-admin" id="btn-toggle-descuento" onclick="toggleDescuentoForm()">+ Descuento / cortesía</button>
+          <div id="descuento-form" class="hidden solo-admin" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
             <select id="desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
             <input type="number" id="desc-valor" placeholder="Ej: 10">
             <input type="text" id="desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
@@ -579,8 +648,8 @@ textarea{resize:vertical; min-height:56px;}
           <div id="servicio-linea" class="hidden" style="display:flex; justify-content:space-between; font-size:.82rem; color:var(--salvia-suave); margin:6px 0;">
             <span id="servicio-label">Servicio</span><span id="servicio-valor" class="mono">+$0</span>
           </div>
-          <button type="button" class="link-btn" id="btn-toggle-servicio" onclick="toggleServicioForm()">+ Propina</button>
-          <div id="servicio-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button type="button" class="link-btn solo-admin" id="btn-toggle-servicio" onclick="toggleServicioForm()">+ Propina</button>
+          <div id="servicio-form" class="hidden solo-admin" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
             <select id="serv-valor" onchange="if(this.value!=='otro') document.getElementById('serv-otro').classList.add('hidden'); else document.getElementById('serv-otro').classList.remove('hidden');">
               <option value="10">10%</option><option value="12">12%</option><option value="15">15%</option><option value="otro">Otro %</option>
             </select>
@@ -590,15 +659,15 @@ textarea{resize:vertical; min-height:56px;}
           </div>
           <div class="recibo-total-row"><span class="tl">Total</span><span class="tv mono" id="recibo-total">$0</span></div>
 
-          <div class="metodo-row" id="metodo-row">
+          <div class="metodo-row solo-admin" id="metodo-row">
             <button data-m="efectivo" class="active" onclick="setMetodo('efectivo')">Efectivo</button>
             <button data-m="transferencia" onclick="setMetodo('transferencia')">Transf.</button>
           </div>
 
-          <div class="efectivo-box" id="efectivo-box">
+          <div class="efectivo-box solo-admin" id="efectivo-box">
             <input type="number" id="input-recibido" placeholder="Recibido" inputmode="numeric" oninput="calcularCambio()">
           </div>
-          <div class="cambio-line" id="cambio-line"></div>
+          <div class="cambio-line solo-admin" id="cambio-line"></div>
 
           <div class="campo" style="margin-top:12px;">
             <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;">Mesa (opcional)</label>
@@ -623,7 +692,7 @@ textarea{resize:vertical; min-height:56px;}
           </div>
           <div class="recibo-notas"><input type="text" id="input-nota-venta" placeholder="Nombre del cliente (opcional)"></div>
 
-          <button class="btn btn-oro btn-block" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
+          <button class="btn btn-oro btn-block solo-admin" id="btn-cobrar" onclick="cobrar()" disabled>Cobrar</button>
           <button class="btn btn-outline btn-block" id="btn-dejar-pendiente" onclick="dejarPendiente()" disabled>Dejar pendiente</button>
           <button class="btn btn-oro btn-block hidden" id="btn-agregar-a-pendiente" onclick="confirmarAgregarAPendiente()" disabled>Agregar a la cuenta pendiente</button>
           <button class="btn btn-outline btn-block" onclick="vaciarPedido()">Vaciar pedido</button>
@@ -632,7 +701,7 @@ textarea{resize:vertical; min-height:56px;}
         </div>
       </div>
 
-      <div class="card">
+      <div class="card solo-admin" id="card-historial">
         <h3 id="hist-titulo">Ventas de hoy <span class="ver-todo" id="hist-count">0 ventas</span></h3>
         <div style="margin-bottom:12px;"><input type="date" id="hist-fecha" onchange="renderHistorialVentas()" style="max-width:180px;"></div>
         <div class="inv-tabla-wrap">
@@ -643,7 +712,7 @@ textarea{resize:vertical; min-height:56px;}
         </div>
       </div>
 
-      <div class="card" style="margin-top:20px;">
+      <div class="card solo-admin" style="margin-top:20px;">
         <h3>Cierres anteriores <span class="ver-todo" id="cierres-count">0</span></h3>
         <div class="inv-tabla-wrap">
           <table class="hist-tabla">
@@ -905,6 +974,11 @@ textarea{resize:vertical; min-height:56px;}
   </div>
 </div>
 
+<!-- ================= INGRESO DE USUARIO ================= -->
+<div id="login-overlay" class="hidden">
+  <div class="login-box" id="login-box"></div>
+</div>
+
 <div id="toast"></div>
 <div id="modal-root"></div>
 
@@ -1130,6 +1204,24 @@ function horaDeValorFecha(v){
    CARGA / GUARDADO — todo vive en Oracle ahora, esto solo sincroniza
    la copia local en memoria que usa la interfaz.
    ========================================================= */
+/* mapea las filas crudas de Oracle al formato que usa la interfaz.
+   Está aparte de cargarDatos() porque el refresco automático también lo usa. */
+function mapearVentas(ventasRows, ventaItemsRows){
+  return ventasRows.map(v=>({
+    id:v.id, ts:Number(v.ts), fecha: fechaOracleAISO(v.fecha), hora:v.hora,
+    subtotal:Number(v.subtotal), total:Number(v.total),
+    descuento: v.descuento_tipo ? { tipo:v.descuento_tipo, valor:Number(v.descuento_valor), motivo:v.descuento_motivo, monto:Number(v.descuento_monto) } : null,
+    metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
+    nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
+    estado: v.estado || 'pagada',
+    motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
+    servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
+    items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) })),
+    fechaPago: v.fecha_pago ? fechaOracleAISO(v.fecha_pago) : null,
+    horaPago: v.hora_pago || null,
+    tsPago: v.ts_pago!=null ? Number(v.ts_pago) : null,
+  }));
+}
 async function cargarDatos(){
   try{
     const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows, movimientosRows] = await Promise.all([
@@ -1147,20 +1239,7 @@ async function cargarDatos(){
     const estadoRow = estadoRows[0] || { id:1, abierta:0, apertura:0, fecha_apertura:null, cajero:null };
     CAJA = {
       estado:{ abierta: !!Number(estadoRow.abierta), apertura:Number(estadoRow.apertura||0), fechaApertura: fechaOracleAISO(estadoRow.fecha_apertura), cajero: estadoRow.cajero||null },
-      ventas: ventasRows.map(v=>({
-        id:v.id, ts:Number(v.ts), fecha: fechaOracleAISO(v.fecha), hora:v.hora,
-        subtotal:Number(v.subtotal), total:Number(v.total),
-        descuento: v.descuento_tipo ? { tipo:v.descuento_tipo, valor:Number(v.descuento_valor), motivo:v.descuento_motivo, monto:Number(v.descuento_monto) } : null,
-        metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
-        nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
-        estado: v.estado || 'pagada',
-        motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
-        servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
-        items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) })),
-        fechaPago: v.fecha_pago ? fechaOracleAISO(v.fecha_pago) : null,
-        horaPago: v.hora_pago || null,
-        tsPago: v.ts_pago!=null ? Number(v.ts_pago) : null,
-      })),
+      ventas: mapearVentas(ventasRows, ventaItemsRows),
       cierres: cierresRows.map(c=>{
         const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
         cierreMetodosRows.filter(x=>x.cierre_id===c.id).forEach(x=>{ porMetodo[x.metodo] = Number(x.total); });
@@ -1187,7 +1266,9 @@ async function cargarDatos(){
 }
 async function sincronizarConOracle(){
   mostrarToast('Sincronizando con Oracle…');
+  try{ await cargarUsuarios(); }catch(e){ console.warn('No se pudo releer usuarios:', e); }
   await cargarDatos();
+  idsPendientesConocidos = new Set(pedidosPendientes().map(v=>v.id));
 }
 
 
@@ -1210,6 +1291,7 @@ function confirmar(mensaje, onSi){
    NAVEGACIÓN
    ========================================================= */
 function cambiarVista(v){
+  if(!vistaPermitida(v)){ mostrarToast('Tu usuario no tiene acceso a esa sección'); return; }
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.v===v));
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
@@ -1410,18 +1492,19 @@ function renderPedidosPendientes(){
   const vacio = document.getElementById('riel-vacio');
   if(vacio) vacio.classList.toggle('hidden', pendientes.length>0);
   cont.innerHTML = pendientes.map((v,i)=>`
-    <div class="comanda" style="--tilt:${tiltComanda(i)}deg;">
+    <div class="comanda ${IDS_PEDIDOS_NUEVOS.has(v.id) ? 'nueva' : ''}" style="--tilt:${tiltComanda(i)}deg;">
       <div class="pinza"></div>
       <div class="papel">
-        <div class="mesa-tag">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'}</div>
+        <div class="mesa-tag">${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'}${v.cajero ? ' · '+v.cajero : ''}</div>
         <div class="items">${v.nota ? v.nota+' · ' : ''}${resumenItems(v.items)}</div>
         <div class="total-row"><span class="lbl">Total</span><span class="val">${fmt(v.total)}</span></div>
         <div class="acciones-comanda">
           <button onclick="abrirModalDetallePendiente('${v.id}')"><span class="full">Ver</span><span class="corta">V</span></button>
           <button onclick="iniciarAgregarAPendiente('${v.id}')"><span class="full">+ Agregar</span><span class="corta">+</span></button>
+          ${esAdmin() ? `
           <button onclick="abrirModalDividir('${v.id}')"><span class="full">Dividir</span><span class="corta">÷</span></button>
           <button class="anular" onclick="abrirModalAnularVenta('${v.id}')"><span class="full">Anular</span><span class="corta">✕</span></button>
-          <button class="cobrar" onclick="abrirModalCobroPendiente('${v.id}')"><span class="full">Cobrar</span></button>
+          <button class="cobrar" onclick="abrirModalCobroPendiente('${v.id}')"><span class="full">Cobrar</span></button>` : ''}
         </div>
       </div>
     </div>`).join('');
@@ -1582,6 +1665,7 @@ function renderModalDetallePendiente(){
     </div>
     <div class="fila-simple"><span class="n">Subtotal</span><span class="p">${fmt(subtotal)}</span></div>
     ${montoDesc>0 ? `<div class="fila-simple"><span class="n" style="color:var(--vino-suave);">${d.tipo==='cortesia'?'Cortesía':'Descuento'} (${d.motivo})</span><span class="p" style="color:var(--vino-suave);">-${fmt(montoDesc)}</span></div>` : ''}
+    <div class="solo-admin">
     <button type="button" class="link-btn" onclick="pendToggleDescuentoForm()">${montoDesc>0?'Editar descuento / cortesía':'+ Descuento / cortesía'}</button>
     <div id="pend-descuento-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
       <select id="pend-desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
@@ -1590,7 +1674,9 @@ function renderModalDetallePendiente(){
       <button type="button" class="btn btn-oro btn-sm" onclick="pendAplicarDescuento()">Aplicar</button>
       <button type="button" class="btn btn-outline btn-sm" onclick="pendQuitarDescuento()">Quitar</button>
     </div>
+    </div>
     ${montoServ>0 ? `<div class="fila-simple"><span class="n" style="color:var(--salvia-suave);">Propina ${s.porcentaje}%</span><span class="p" style="color:var(--salvia-suave);">+${fmt(montoServ)}</span></div>` : ''}
+    <div class="solo-admin">
     <button type="button" class="link-btn" onclick="pendToggleServicioForm()">${montoServ>0?'Editar propina':'+ Propina'}</button>
     <div id="pend-servicio-form" class="hidden" style="margin:10px 0 14px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
       <select id="pend-serv-valor" onchange="if(this.value!=='otro') document.getElementById('pend-serv-otro').classList.add('hidden'); else document.getElementById('pend-serv-otro').classList.remove('hidden');">
@@ -1599,6 +1685,7 @@ function renderModalDetallePendiente(){
       <input type="number" id="pend-serv-otro" placeholder="Ej: 8" class="hidden">
       <button type="button" class="btn btn-oro btn-sm" onclick="pendAplicarServicio()">Aplicar</button>
       <button type="button" class="btn btn-outline btn-sm" onclick="pendQuitarServicio()">Quitar</button>
+    </div>
     </div>
     <div class="fila-simple" style="font-weight:600; margin-top:6px;"><span class="n">Total</span><span class="p">${fmt(total)}</span></div>
     <div class="modal-actions" style="margin-top:16px; flex-wrap:wrap;">
@@ -1668,9 +1755,17 @@ async function guardarDetallePendiente(){
 }
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
+  const cerradaMesero = document.getElementById('caja-cerrada-mesero-box');
   const abiertaBox = document.getElementById('caja-abierta-box');
-  if(!CAJA.estado.abierta){ cerradaBox.classList.remove('hidden'); abiertaBox.classList.add('hidden'); return; }
-  cerradaBox.classList.add('hidden'); abiertaBox.classList.remove('hidden');
+  if(!CAJA.estado.abierta){
+    cerradaBox.classList.remove('hidden');
+    if(cerradaMesero) cerradaMesero.classList.remove('hidden');
+    abiertaBox.classList.add('hidden');
+    return;
+  }
+  cerradaBox.classList.add('hidden');
+  if(cerradaMesero) cerradaMesero.classList.add('hidden');
+  abiertaBox.classList.remove('hidden');
   document.getElementById('cajero-actual').textContent = CAJA.estado.cajero || 'Sin nombre';
 
   const bajos = insumosBajos();
@@ -1725,7 +1820,7 @@ async function confirmarMovimiento(tipo){
   const motivo = document.getElementById('mov-motivo').value.trim();
   if(monto<=0){ mostrarToast('Ingresa un monto válido'); return; }
   if(!motivo){ mostrarToast('Escribe el motivo del movimiento'); return; }
-  const mov = { id: uid('m'), fecha: fechaOperativa(), tipo, monto, motivo, cajero: CAJA.estado.cajero||null, ts: Date.now(), cerrada:false };
+  const mov = { id: uid('m'), fecha: fechaOperativa(), tipo, monto, motivo, cajero: nombreUsuarioActual(), ts: Date.now(), cerrada:false };
   try{
     await oInsert('movimientos_caja', { id:mov.id, fecha:aOracleFecha(mov.fecha), tipo:mov.tipo, monto:mov.monto, motivo:mov.motivo, cajero:mov.cajero, ts:mov.ts, cerrada:0 });
     CAJA.movimientos.push(mov);
@@ -1762,7 +1857,7 @@ function renderMovimientosCaja(){
 
 async function abrirCaja(){
   const val = toNum(document.getElementById('input-apertura').value || 0);
-  const cajero = document.getElementById('input-cajero').value.trim() || 'Sin nombre';
+  const cajero = document.getElementById('input-cajero').value.trim() || nombreUsuarioActual() || 'Sin nombre';
   const fecha = hoyISO();
   try{
     await oUpdate('caja_estado', 1, { id:1, abierta:1, apertura:val, fecha_apertura:aOracleFecha(fecha), cajero });
@@ -2308,7 +2403,7 @@ async function dejarPendiente(){
     servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: null, recibido: null, cambio: null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
-    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null,
+    cajero: nombreUsuarioActual(), mesa: mesaVal ? parseInt(mesaVal,10) : null,
     estado: 'pendiente',
     fechaPago: null, horaPago: null, tsPago: null
   };
@@ -2354,7 +2449,7 @@ async function cobrar(){
     servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
     metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
     nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
-    cajero: CAJA.estado.cajero || null, mesa: mesaVal ? parseInt(mesaVal,10) : null, estado:'pagada',
+    cajero: nombreUsuarioActual(), mesa: mesaVal ? parseInt(mesaVal,10) : null, estado:'pagada',
     fechaPago: fechaOperativa(), horaPago: ahoraStr(), tsPago: Date.now()
   };
   document.getElementById('btn-cobrar').disabled = true;  
@@ -2481,7 +2576,7 @@ async function confirmarAnulacionVenta(){
   try{
     await restaurarInventarioPorAnulacion(v.items);
     const ts = Date.now();
-    const cajero = CAJA.estado.cajero || null;
+    const cajero = nombreUsuarioActual();
     await oUpdate('ventas', v.id, {
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
@@ -3108,10 +3203,430 @@ function exportarReservasCSV(){
 }
 
 /* =========================================================
+   USUARIOS, ROLES Y SESIÓN
+   -----------------------------------------------------------
+   Los usuarios viven en la tabla USUARIOS de Oracle (ver usuarios.sql).
+   Rol "admin": toda la app. Rol "mesero": solo la vista Caja, y dentro
+   de ella solo puede armar pedidos y dejarlos pendientes (no cobra,
+   no abre ni cierra caja, no toca inventario ni productos).
+
+   Importante: este control es OPERATIVO, no de seguridad. Vive en el
+   navegador, así que sirve para ordenar el trabajo del equipo, no para
+   defenderse de alguien con conocimientos técnicos.
+   ========================================================= */
+const PERMISOS = {
+  admin:  { vistas:['resumen','caja','productos','inventario','reservas','estadisticas'] },
+  mesero: { vistas:['caja'] }
+};
+let USUARIOS = [];
+let SESION = null;
+const SESION_KEY = 'cafereal_sesion';
+const SESION_HORAS = 16; /* después de esto se vuelve a pedir el PIN */
+
+function esAdmin(){ return !!SESION && SESION.rol === 'admin'; }
+function nombreUsuarioActual(){ return (SESION && SESION.nombre) || CAJA.estado.cajero || null; }
+function vistaPermitida(v){
+  const rol = SESION ? SESION.rol : 'admin';
+  const p = PERMISOS[rol] || PERMISOS.mesero;
+  return p.vistas.includes(v);
+}
+function inicialesUsuario(nombre){
+  const partes = String(nombre||'').trim().split(/\s+/).filter(Boolean);
+  if(!partes.length) return '—';
+  if(partes.length===1) return partes[0].slice(0,2).toUpperCase();
+  return (partes[0][0] + partes[1][0]).toUpperCase();
+}
+function escaparTexto(t){
+  return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function cargarUsuarios(){
+  const rows = await oListAll('usuarios');
+  USUARIOS = rows.map(r=>({
+    id: r.id,
+    nombre: r.nombre || 'Sin nombre',
+    rol: String(r.rol||'mesero').toLowerCase()==='admin' ? 'admin' : 'mesero',
+    pin: String(r.pin==null ? '' : r.pin).trim(),
+    activo: r.activo==null ? true : !!Number(r.activo)
+  })).sort((a,b)=> a.rol===b.rol ? a.nombre.localeCompare(b.nombre) : (a.rol==='admin' ? -1 : 1));
+  return USUARIOS;
+}
+function filaUsuarioOracle(u){
+  return { id:u.id, nombre:u.nombre, rol:u.rol, pin:u.pin, activo: u.activo?1:0 };
+}
+
+/* ---------------- arranque ---------------- */
+async function arrancar(){
+  const loader = document.getElementById('loader');
+  try{
+    await cargarUsuarios();
+  }catch(e){
+    console.error(e);
+    if(loader) loader.style.display='none';
+    mostrarLogin('No se pudo leer la tabla USUARIOS en Oracle. Revisa que exista y esté publicada en REST (mira usuarios.sql).');
+    return;
+  }
+
+  /* primera vez: si la tabla está vacía, creamos un admin para poder entrar */
+  if(!USUARIOS.length){
+    try{
+      const nuevo = { id:'u'+Date.now(), nombre:'Admin', rol:'admin', pin:'1234', activo:true };
+      await oInsert('usuarios', filaUsuarioOracle(nuevo));
+      USUARIOS = [nuevo];
+    }catch(e){ console.error(e); }
+  }
+
+  const guardada = restaurarSesion();
+  if(loader) loader.style.display='none';
+  if(guardada) entrarComo(guardada);
+  else mostrarLogin();
+}
+
+function restaurarSesion(){
+  let s = null;
+  try{ s = JSON.parse(localStorage.getItem(SESION_KEY) || 'null'); }catch(e){ return null; }
+  if(!s || !s.id || !s.ts) return null;
+  if(Date.now() - s.ts > SESION_HORAS*3600*1000) return null;
+  const u = USUARIOS.find(x=>x.id===s.id && x.activo);
+  return u || null; /* si lo borraron o desactivaron, vuelve a pedir PIN */
+}
+
+function entrarComo(u){
+  SESION = { id:u.id, nombre:u.nombre, rol:u.rol, ts: Date.now() };
+  try{ localStorage.setItem(SESION_KEY, JSON.stringify(SESION)); }catch(e){}
+  document.getElementById('login-overlay').classList.add('hidden');
+  aplicarPermisos();
+  const loader = document.getElementById('loader');
+  if(loader){ loader.style.display='flex'; loader.style.opacity='1'; }
+  cargarDatos().then(()=>{ iniciarAutoRefresco(); });
+}
+
+function aplicarPermisos(){
+  const rol = SESION ? SESION.rol : 'admin';
+  document.body.classList.toggle('rol-mesero', rol!=='admin');
+  const nom = document.getElementById('usuario-nombre');
+  const rl  = document.getElementById('usuario-rol');
+  const av  = document.getElementById('usuario-avatar');
+  if(nom) nom.textContent = SESION ? SESION.nombre : '—';
+  if(rl)  rl.textContent  = rol==='admin' ? 'Admin' : 'Mesero';
+  if(av)  av.textContent  = SESION ? inicialesUsuario(SESION.nombre) : '—';
+
+  /* el nombre del cajero ya no se escribe a mano: es el usuario que entró */
+  const inputCajero = document.getElementById('input-cajero');
+  if(inputCajero && SESION) inputCajero.value = SESION.nombre;
+
+  const permitidas = (PERMISOS[rol] || PERMISOS.mesero).vistas;
+  const activa = document.querySelector('.tabs button.active');
+  if(!activa || !permitidas.includes(activa.dataset.v)) cambiarVista(permitidas[0]);
+}
+
+/* ---------------- pantalla de ingreso ---------------- */
+let loginUsuarioSel = null;
+let loginPin = '';
+
+function mostrarLogin(msg){
+  SESION = null;
+  document.body.classList.remove('rol-mesero');
+  loginUsuarioSel = null; loginPin = '';
+  document.getElementById('login-overlay').classList.remove('hidden');
+  renderLogin(msg);
+}
+function renderLogin(msg){
+  const box = document.getElementById('login-box');
+  const logo = `<div class="logo"><img src="images/logo.png" alt="Café Real" onerror="this.style.display='none'; this.parentElement.textContent='CR';"></div>`;
+  if(!loginUsuarioSel){
+    const activos = USUARIOS.filter(u=>u.activo);
+    box.innerHTML = logo + `
+      <h2>Café Real</h2>
+      <div class="sub">¿Quién está entrando?</div>
+      <div class="login-lista">
+        ${activos.length ? activos.map(u=>`
+          <button class="login-user" onclick="elegirUsuarioLogin('${u.id}')">
+            <span class="av">${inicialesUsuario(u.nombre)}</span>
+            <span><span class="nom">${escaparTexto(u.nombre)}</span><span class="rol">${u.rol==='admin'?'Administrador':'Mesero'}</span></span>
+          </button>`).join('') : '<div class="login-error">No hay usuarios activos en la tabla USUARIOS.</div>'}
+      </div>
+      <div class="login-error">${escaparTexto(msg||'')}</div>
+      <div class="login-nota">Cada persona entra con su PIN. El administrador ve toda la app; los meseros solo la caja para tomar pedidos.</div>`;
+  }else{
+    box.innerHTML = logo + `
+      <h2>${escaparTexto(loginUsuarioSel.nombre)}</h2>
+      <div class="sub">Escribe tu PIN de 4 dígitos</div>
+      <div class="pin-puntos">${[0,1,2,3].map(i=>`<div class="pin-punto ${i<loginPin.length?'on':''}"></div>`).join('')}</div>
+      <div class="pin-pad">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button onclick="pinTecla('${n}')">${n}</button>`).join('')}
+        <button class="gris" onclick="volverAListaLogin()">Volver</button>
+        <button onclick="pinTecla('0')">0</button>
+        <button class="gris" onclick="pinBorrar()">Borrar</button>
+      </div>
+      <div class="login-error">${escaparTexto(msg||'')}</div>`;
+  }
+}
+function elegirUsuarioLogin(id){
+  loginUsuarioSel = USUARIOS.find(u=>u.id===id) || null;
+  loginPin = '';
+  renderLogin();
+}
+function volverAListaLogin(){ loginUsuarioSel = null; loginPin=''; renderLogin(); }
+function pinBorrar(){ loginPin = loginPin.slice(0,-1); renderLogin(); }
+function pinTecla(n){
+  if(!loginUsuarioSel || loginPin.length>=4) return;
+  loginPin += String(n);
+  renderLogin();
+  if(loginPin.length===4) setTimeout(validarPin, 120);
+}
+function validarPin(){
+  const u = loginUsuarioSel;
+  if(!u) return;
+  if(loginPin === u.pin){ loginPin=''; entrarComo(u); }
+  else { loginPin=''; renderLogin('PIN incorrecto, intenta de nuevo'); }
+}
+/* en el PC se puede teclear el PIN con el teclado */
+document.addEventListener('keydown', (e)=>{
+  const ov = document.getElementById('login-overlay');
+  if(!ov || ov.classList.contains('hidden') || !loginUsuarioSel) return;
+  if(/^[0-9]$/.test(e.key)) pinTecla(e.key);
+  else if(e.key==='Backspace') pinBorrar();
+  else if(e.key==='Escape') volverAListaLogin();
+});
+
+function abrirModalSesion(){
+  const root = document.getElementById('modal-root');
+  const rol = SESION ? (SESION.rol==='admin'?'Administrador':'Mesero') : '—';
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <div class="usuario-fila" style="justify-content:center; border:none;">
+      <span class="av">${SESION?inicialesUsuario(SESION.nombre):'—'}</span>
+      <div class="info"><b>${escaparTexto(SESION?SESION.nombre:'—')}</b><small>${rol}</small></div>
+    </div>
+    ${esAdmin() ? '<button class="btn btn-outline btn-block" onclick="cerrarModalYAbrirUsuarios()">Administrar usuarios</button>' : ''}
+    <button class="btn btn-vino btn-block" onclick="cerrarSesion()">Cerrar sesión</button>
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''">Volver</button>
+  </div></div>`;
+}
+function cerrarModalYAbrirUsuarios(){
+  document.getElementById('modal-root').innerHTML='';
+  abrirModalUsuarios();
+}
+function cerrarSesion(){
+  try{ localStorage.removeItem(SESION_KEY); }catch(e){}
+  detenerAutoRefresco();
+  location.reload();
+}
+
+/* ---------------- administración de usuarios (solo admin) ---------------- */
+function abrirModalUsuarios(){
+  if(!esAdmin()){ mostrarToast('Solo el administrador puede gestionar usuarios'); return; }
+  renderModalUsuarios();
+}
+function renderModalUsuarios(){
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho" style="text-align:left;">
+    <h3 style="text-align:center; margin-bottom:6px;">Usuarios</h3>
+    <p style="font-size:.74rem; color:var(--concreto); text-align:center; margin-bottom:16px;">El administrador ve toda la app. Los meseros solo la caja, para tomar pedidos y dejarlos pendientes.</p>
+    <div>
+      ${USUARIOS.map(u=>`
+        <div class="usuario-fila" style="${u.activo?'':'opacity:.5;'}">
+          <span class="av">${inicialesUsuario(u.nombre)}</span>
+          <div class="info">
+            <b>${escaparTexto(u.nombre)}${SESION && SESION.id===u.id ? ' <span style="font-size:.6rem; color:var(--oro);">(tú)</span>' : ''}</b>
+            <small>${u.rol==='admin'?'Administrador':'Mesero'}${u.activo?'':' · inactivo'}</small>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="cambiarPinUsuario('${u.id}')">PIN</button>
+          <button class="btn btn-outline btn-sm" onclick="alternarActivoUsuario('${u.id}')">${u.activo?'Desactivar':'Activar'}</button>
+          <button class="btn btn-vino btn-sm" onclick="borrarUsuario('${u.id}')">Borrar</button>
+        </div>`).join('')}
+    </div>
+    <div style="border-top:1px solid var(--linea-fuerte); margin-top:16px; padding-top:16px;">
+      <div style="font-size:.78rem; font-weight:600; margin-bottom:10px;">Agregar usuario</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <input type="text" id="nu-nombre" placeholder="Nombre" style="grid-column:1/3;">
+        <select id="nu-rol"><option value="mesero">Mesero</option><option value="admin">Administrador</option></select>
+        <input type="text" id="nu-pin" placeholder="PIN (4 dígitos)" inputmode="numeric" maxlength="4">
+      </div>
+      <button class="btn btn-oro btn-block" onclick="crearUsuario()">Agregar</button>
+    </div>
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cerrar</button>
+    </div>
+  </div></div>`;
+}
+function pinValido(pin){ return /^[0-9]{4}$/.test(pin); }
+async function crearUsuario(){
+  const nombre = document.getElementById('nu-nombre').value.trim();
+  const rol = document.getElementById('nu-rol').value;
+  const pin = document.getElementById('nu-pin').value.trim();
+  if(!nombre){ mostrarToast('Escribe el nombre'); return; }
+  if(!pinValido(pin)){ mostrarToast('El PIN debe ser de 4 dígitos'); return; }
+  const u = { id:'u'+Date.now(), nombre, rol, pin, activo:true };
+  try{
+    await oInsert('usuarios', filaUsuarioOracle(u));
+    await cargarUsuarios();
+    renderModalUsuarios();
+    mostrarToast('Usuario creado');
+  }catch(e){ console.error(e); mostrarToast('No se pudo crear el usuario en Oracle'); }
+}
+async function cambiarPinUsuario(id){
+  const u = USUARIOS.find(x=>x.id===id);
+  if(!u) return;
+  const nuevo = prompt(`Nuevo PIN de 4 dígitos para ${u.nombre}:`, '');
+  if(nuevo===null) return;
+  if(!pinValido(nuevo.trim())){ mostrarToast('El PIN debe ser de 4 dígitos'); return; }
+  try{
+    await oUpdate('usuarios', u.id, filaUsuarioOracle({ ...u, pin:nuevo.trim() }));
+    await cargarUsuarios();
+    renderModalUsuarios();
+    mostrarToast('PIN actualizado');
+  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el PIN'); }
+}
+function adminsActivos(){ return USUARIOS.filter(u=>u.rol==='admin' && u.activo); }
+async function alternarActivoUsuario(id){
+  const u = USUARIOS.find(x=>x.id===id);
+  if(!u) return;
+  if(u.activo && u.rol==='admin' && adminsActivos().length<=1){ mostrarToast('Debe quedar al menos un administrador activo'); return; }
+  try{
+    await oUpdate('usuarios', u.id, filaUsuarioOracle({ ...u, activo: !u.activo }));
+    await cargarUsuarios();
+    renderModalUsuarios();
+  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el usuario'); }
+}
+function borrarUsuario(id){
+  const u = USUARIOS.find(x=>x.id===id);
+  if(!u) return;
+  if(SESION && SESION.id===u.id){ mostrarToast('No puedes borrar el usuario con el que estás trabajando'); return; }
+  if(u.rol==='admin' && adminsActivos().length<=1){ mostrarToast('Debe quedar al menos un administrador activo'); return; }
+  confirmar(`¿Borrar a ${escaparTexto(u.nombre)}? Las ventas que ya registró se conservan.`, async ()=>{
+    try{
+      await oDelete('usuarios', u.id);
+      await cargarUsuarios();
+      renderModalUsuarios();
+      mostrarToast('Usuario borrado');
+    }catch(e){ console.error(e); mostrarToast('No se pudo borrar el usuario'); }
+  });
+}
+
+/* =========================================================
+   REFRESCO AUTOMÁTICO
+   -----------------------------------------------------------
+   Antes la app solo leía Oracle al abrir o al pulsar 🔄. Ahora cada
+   REFRESCO_MS relee ventas y estado de caja, para que un pedido que un
+   mesero deja desde el celular aparezca solo en el PC de la caja.
+   ========================================================= */
+const REFRESCO_MS = 15000;
+let refrescoTimer = null;
+let refrescando = false;
+let idsPendientesConocidos = new Set();
+let IDS_PEDIDOS_NUEVOS = new Set();
+let audioCtx = null;
+
+function iniciarAutoRefresco(){
+  idsPendientesConocidos = new Set(pedidosPendientes().map(v=>v.id));
+  detenerAutoRefresco();
+  refrescoTimer = setInterval(refrescoAutomatico, REFRESCO_MS);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refrescoAutomatico(); });
+}
+function detenerAutoRefresco(){ if(refrescoTimer){ clearInterval(refrescoTimer); refrescoTimer=null; } }
+
+async function refrescoAutomatico(){
+  if(refrescando || !SESION) return;
+  if(document.hidden) return;
+  /* si hay un modal abierto (cobro, división, detalle…) no tocamos los datos
+     debajo de las manos del usuario: esperamos al siguiente ciclo */
+  const modal = document.getElementById('modal-root');
+  if(modal && modal.innerHTML.trim() !== '') return;
+  refrescando = true;
+  try{
+    const [ventasRows, ventaItemsRows, estadoRows] = await Promise.all([
+      oListAll('ventas'), oListAll('venta_items'), oListAll('caja_estado')
+    ]);
+    const estadoRow = estadoRows[0];
+    const cajaEstabaAbierta = CAJA.estado.abierta;
+    if(estadoRow){
+      CAJA.estado = {
+        abierta: !!Number(estadoRow.abierta),
+        apertura: Number(estadoRow.apertura||0),
+        fechaApertura: fechaOracleAISO(estadoRow.fecha_apertura),
+        cajero: estadoRow.cajero||null
+      };
+    }
+    CAJA.ventas = mapearVentas(ventasRows, ventaItemsRows);
+
+    /* ¿qué pedidos pendientes son nuevos para esta pantalla? */
+    const pendientesAhora = pedidosPendientes();
+    const idsAhora = new Set(pendientesAhora.map(v=>v.id));
+    const nuevos = pendientesAhora.filter(v=>!idsPendientesConocidos.has(v.id) && v.cajero !== (SESION && SESION.nombre));
+    idsPendientesConocidos = idsAhora;
+
+    if(CAJA.estado.abierta !== cajaEstabaAbierta){ renderCaja(); }
+    else { renderPedidosPendientes(); renderMesasGrid(); renderHistorialVentas(); renderCierrePreview(); }
+    renderResumen();
+
+    if(nuevos.length){
+      IDS_PEDIDOS_NUEVOS = new Set(nuevos.map(v=>v.id));
+      renderPedidosPendientes();
+      const riel = document.querySelector('.riel-wrap');
+      if(riel){ riel.classList.remove('nuevo'); void riel.offsetWidth; riel.classList.add('nuevo'); }
+      if(esAdmin()){ sonarCampana(); mostrarAvisoNuevoPedido(nuevos); }
+      setTimeout(()=>{ IDS_PEDIDOS_NUEVOS = new Set(); renderPedidosPendientes(); }, 60000);
+    }
+  }catch(e){
+    console.warn('Refresco automático falló (se reintenta en el próximo ciclo):', e);
+  }finally{
+    refrescando = false;
+  }
+}
+
+function mostrarAvisoNuevoPedido(nuevos){
+  const anterior = document.getElementById('aviso-nuevo-pedido');
+  if(anterior) anterior.remove();
+  const v = nuevos[0];
+  const detalle = nuevos.length===1
+    ? `${v.mesa ? 'Mesa '+v.mesa : 'Para llevar'}${v.cajero ? ' · '+escaparTexto(v.cajero) : ''} · ${fmt(v.total)}`
+    : `${nuevos.length} comandas nuevas por cobrar`;
+  const div = document.createElement('div');
+  div.id = 'aviso-nuevo-pedido';
+  div.innerHTML = `
+    <span class="ico">🔔</span>
+    <div>
+      <div class="t">${nuevos.length===1 ? 'Pedido nuevo en caja' : 'Pedidos nuevos en caja'}</div>
+      <div class="d">${detalle}</div>
+      <button class="btn btn-oro btn-sm" style="margin-top:10px;" onclick="irAPedidosPendientes()">Ver en caja</button>
+    </div>
+    <button class="cerrar" onclick="this.parentElement.remove()">✕</button>`;
+  document.body.appendChild(div);
+  clearTimeout(mostrarAvisoNuevoPedido._t);
+  mostrarAvisoNuevoPedido._t = setTimeout(()=>{ const a = document.getElementById('aviso-nuevo-pedido'); if(a) a.remove(); }, 25000);
+}
+function irAPedidosPendientes(){
+  const a = document.getElementById('aviso-nuevo-pedido');
+  if(a) a.remove();
+  cambiarVista('caja');
+  const riel = document.querySelector('.riel-wrap');
+  if(riel) riel.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+/* campanita generada por el navegador: no hace falta ningún archivo de audio */
+function sonarCampana(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    const t0 = audioCtx.currentTime;
+    [880, 1174.7].forEach((f, i)=>{
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      const t = t0 + i*0.2;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.22, t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+0.55);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t+0.6);
+    });
+  }catch(e){ /* si el navegador bloquea el audio, el aviso visual sigue ahí */ }
+}
+
+/* =========================================================
    INIT
    ========================================================= */
 document.getElementById('r-fecha').valueAsDate = new Date();
-cargarDatos();
+arrancar();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', () => {
