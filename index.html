@@ -1589,6 +1589,7 @@ function renderPedidosPendientes(){
         <div class="acciones-comanda">
           <button onclick="abrirModalDetallePendiente('${v.id}')"><span class="full">Ver</span><span class="corta">V</span></button>
           <button onclick="iniciarAgregarAPendiente('${v.id}')"><span class="full">+ Agregar</span><span class="corta">+</span></button>
+          <button style="grid-column:1/3;" onclick="imprimirPrecuenta('${v.id}')"><span class="full">🧾 Pre-cuenta</span><span class="corta">🧾</span></button>
           ${esAdmin() ? `
           <button onclick="abrirModalDividir('${v.id}')"><span class="full">Dividir</span><span class="corta">÷</span></button>
           <button class="anular" onclick="abrirModalAnularVenta('${v.id}')"><span class="full">Anular</span><span class="corta">✕</span></button>
@@ -2724,6 +2725,39 @@ function imprimirVenta(venta){
     <div class="ri-fila ri-total-final"><span>TOTAL A PAGAR:</span><span>${fmt(venta.total)}</span></div>
     ${venta.recibido!=null ? `<div class="ri-fila"><span>Recibido</span><span>${fmt(venta.recibido)}</span></div><div class="ri-fila"><span>Cambio</span><span>${fmt(venta.cambio)}</span></div>` : ''}
     <div class="ri-linea"></div>
+    <div class="centrado">¡Gracias por visitarnos!</div>
+    <div class="centrado">IG: @caferealtulua</div>
+  `;
+  setTimeout(()=>window.print(), 80);
+}
+function imprimirPrecuenta(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  const el = document.getElementById('recibo-imprimible');
+  const fechaHora = new Date().toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
+  el.innerHTML = `
+    <h4>CAFÉ REAL</h4>
+    <div class="ri-sub">CENTRO DE NEGOCIOS</div>
+    <div class="centrado">Cra. 44 #37-156, Tuluá, Valle</div>
+    <div class="ri-linea"></div>
+    <div class="centrado" style="font-weight:bold; font-size:13px;">PRE-CUENTA</div>
+    <div class="centrado">No es comprobante de pago</div>
+    <div class="ri-linea"></div>
+    <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
+    ${v.cajero ? `<div class="ri-fila"><span>ATENDIÓ:</span><span>${v.cajero}</span></div>` : ''}
+    ${v.nota ? `<div class="ri-fila"><span>CLIENTE:</span><span>${v.nota}</span></div>` : ''}
+    ${v.mesa ? `<div class="ri-fila"><span>MESA:</span><span>${v.mesa}</span></div>` : ''}
+    <div class="ri-linea"></div>
+    ${v.items.map(i=>`<div class="ri-fila" style="font-weight:600;"><span>${i.cantidad} x ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
+    <div class="ri-linea"></div>
+    <div class="ri-fila"><span>SUBTOTAL:</span><span>${fmt(v.subtotal)}</span></div>
+    ${v.descuento ? `<div class="ri-fila"><span>${v.descuento.tipo==='cortesia'?'CORTESÍA':'DESCUENTO'} (${v.descuento.motivo}):</span><span>-${fmt(v.descuento.monto)}</span></div>` : ''}
+    ${v.servicioMonto>0 ? `<div class="ri-fila"><span>PROPINA (Sugerida):</span><span>${fmt(v.servicioMonto)}</span></div>` : ''}
+    <div class="ri-linea"></div>
+    <div class="ri-fila ri-total-final"><span>TOTAL A PAGAR:</span><span>${fmt(v.total)}</span></div>
+    <div class="ri-linea"></div>
+    <div class="centrado">Por favor verifica tu consumo</div>
+    <div class="centrado">Medios de pago: efectivo o transferencia</div>
     <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
   `;
