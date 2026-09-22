@@ -217,6 +217,13 @@ main{max-width:1360px; margin:0 auto; padding:22px 20px 90px;}
 .metodo-row button.active{background:var(--madera); border-color:var(--madera); color:var(--hierro); font-weight:600;}
 .efectivo-box{margin-top:12px; display:grid; grid-template-columns:1fr; gap:8px;}
 .efectivo-box input{font-family:'IBM Plex Mono',monospace; text-align:right;}
+.pago-mixto-box{margin-top:12px; padding:12px; border:1px solid var(--linea-fuerte); border-radius:10px; background:var(--panel-2);}
+.pago-mixto-box .ayuda{font-size:.72rem; color:var(--concreto); line-height:1.4; margin-bottom:9px;}
+.pago-mixto-grid{display:grid; gap:8px;}
+.pago-mixto-box input{font-family:'IBM Plex Mono',monospace; text-align:right;}
+.pago-mixto-resumen{font-size:.76rem; line-height:1.5; margin-top:9px; color:var(--concreto);}
+.pago-mixto-resumen strong{color:var(--oro-suave);}
+
 .cambio-line{display:flex; justify-content:space-between; font-size:.8rem; margin-top:8px; color:var(--concreto);}
 .cambio-line strong{color:var(--salvia-suave); font-family:'IBM Plex Mono',monospace;}
 .cambio-line.neg strong{color:var(--vino-suave);}
@@ -740,10 +747,19 @@ html,body{overflow-x:hidden; width:100%;}
           <div class="metodo-row solo-admin" id="metodo-row">
             <button data-m="efectivo" class="active" onclick="setMetodo('efectivo')">Efectivo</button>
             <button data-m="transferencia" onclick="setMetodo('transferencia')">Transf.</button>
+            <button data-m="mixto" onclick="setMetodo('mixto')">Mixto</button>
           </div>
 
           <div class="efectivo-box solo-admin" id="efectivo-box">
-            <input type="number" id="input-recibido" placeholder="Recibido" inputmode="numeric" oninput="calcularCambio()">
+            <input type="number" id="input-recibido" placeholder="Recibido en efectivo" inputmode="numeric" oninput="calcularCambio()">
+          </div>
+          <div class="pago-mixto-box solo-admin hidden" id="pago-mixto-box">
+            <div class="ayuda">Pago mixto = <strong>efectivo + transferencia</strong>. Escribe cuánto paga por transferencia y el resto queda en efectivo.</div>
+            <div class="pago-mixto-grid">
+              <input type="number" id="input-mixto-transferencia" placeholder="Valor por transferencia" inputmode="numeric" oninput="calcularCambio()">
+              <input type="number" id="input-mixto-recibido" placeholder="Efectivo recibido (opcional)" inputmode="numeric" oninput="calcularCambio()">
+            </div>
+            <div class="pago-mixto-resumen" id="pago-mixto-resumen"></div>
           </div>
           <div class="cambio-line solo-admin" id="cambio-line"></div>
 
@@ -1164,6 +1180,7 @@ let pedido = {}; // productoId -> {productoId, nombre, precio, cantidad}
 let descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
 let servicioActual = { activo:false, porcentaje:0 };
 let metodoActual = 'efectivo';
+let pagoMixtoActual = false;
 let catActiva = null;
 let prodCatActiva = 'todas';
 let filtroReserva = 'hoy';
@@ -1289,7 +1306,7 @@ function mapearVentas(ventasRows, ventaItemsRows){
     id:v.id, ts:Number(v.ts), fecha: fechaOracleAISO(v.fecha), hora:v.hora,
     subtotal:Number(v.subtotal), total:Number(v.total),
     descuento: v.descuento_tipo ? { tipo:v.descuento_tipo, valor:Number(v.descuento_valor), motivo:v.descuento_motivo, monto:Number(v.descuento_monto) } : null,
-    metodo:v.metodo, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
+    metodo:v.metodo, metodo2:v.metodo2 || null, monto2:v.monto2!=null?Number(v.monto2):null, recibido: v.recibido!=null?Number(v.recibido):null, cambio: v.cambio!=null?Number(v.cambio):null,
     nota:v.nota||'', cajero:v.cajero||null, cerrada: !!Number(v.cerrada), mesa: v.mesa!=null?Number(v.mesa):null,
     estado: v.estado || 'pagada',
     motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
@@ -1299,6 +1316,20 @@ function mapearVentas(ventasRows, ventaItemsRows){
     horaPago: v.hora_pago || null,
     tsPago: v.ts_pago!=null ? Number(v.ts_pago) : null,
   }));
+}
+function desglosePago(v){
+  const total = Number(v.total||0);
+  if(v.metodo2 && v.monto2!=null){
+    const segundo = Math.max(0, Math.min(total, Number(v.monto2)||0));
+    const primero = Math.max(0, total - segundo);
+    return { [v.metodo||'efectivo']: primero, [v.metodo2]: segundo };
+  }
+  return { [v.metodo||'efectivo']: total };
+}
+function textoPago(v){
+  const d = desglosePago(v);
+  const partes = Object.entries(d).filter(([,m])=>m>0).map(([m,monto])=>`${METODOS[m]?.label||m}: ${fmt(monto)}`);
+  return partes.join(' + ') || 'Sin pago';
 }
 async function cargarDatos(){
   try{
@@ -1602,7 +1633,7 @@ let pendienteCobroActual = null;
 function abrirModalCobroPendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
-  pendienteCobroActual = { id: v.id, metodo:'efectivo' };
+  pendienteCobroActual = { id:v.id, mixto:false };
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
     <h3>Cobrar cuenta ${v.mesa ? '· Mesa '+v.mesa : ''}</h3>
@@ -1615,9 +1646,18 @@ function abrirModalCobroPendiente(id){
     <div class="metodo-row" id="metodo-row-pendiente">
       <button data-m="efectivo" class="active" onclick="setMetodoPendiente('efectivo')">Efectivo</button>
       <button data-m="transferencia" onclick="setMetodoPendiente('transferencia')">Transf.</button>
+      <button data-m="mixto" onclick="setMetodoPendiente('mixto')">Mixto</button>
     </div>
     <div class="efectivo-box" id="efectivo-box-pendiente" style="margin-top:12px;">
-      <input type="number" id="input-recibido-pendiente" placeholder="Recibido" inputmode="numeric" oninput="calcularCambioPendiente()">
+      <input type="number" id="input-recibido-pendiente" placeholder="Recibido en efectivo" inputmode="numeric" oninput="calcularCambioPendiente()">
+    </div>
+    <div class="pago-mixto-box hidden" id="pago-mixto-box-pendiente">
+      <div class="ayuda">Escribe cuánto paga por transferencia y el resto queda en efectivo.</div>
+      <div class="pago-mixto-grid">
+        <input type="number" id="input-mixto-transferencia-pendiente" placeholder="Valor por transferencia" inputmode="numeric" oninput="calcularCambioPendiente()">
+        <input type="number" id="input-mixto-recibido-pendiente" placeholder="Efectivo recibido (opcional)" inputmode="numeric" oninput="calcularCambioPendiente()">
+      </div>
+      <div class="pago-mixto-resumen" id="pago-mixto-resumen-pendiente"></div>
     </div>
     <div class="cambio-line" id="cambio-line-pendiente"></div>
     <div class="modal-actions" style="margin-top:16px;">
@@ -1625,54 +1665,81 @@ function abrirModalCobroPendiente(id){
       <button class="btn btn-oro" onclick="confirmarCobroPendiente()">Confirmar cobro</button>
     </div>
   </div></div>`;
+  calcularCambioPendiente();
 }
 function setMetodoPendiente(m){
-  pendienteCobroActual.metodo = m;
+  pendienteCobroActual.mixto = m==='mixto';
+  pendienteCobroActual.metodo = m==='mixto' ? 'efectivo' : m;
   document.querySelectorAll('#metodo-row-pendiente button').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
   document.getElementById('efectivo-box-pendiente').classList.toggle('hidden', m!=='efectivo');
-  document.getElementById('cambio-line-pendiente').classList.toggle('hidden', m!=='efectivo');
+  document.getElementById('pago-mixto-box-pendiente').classList.toggle('hidden', m!=='mixto');
+  document.getElementById('cambio-line-pendiente').classList.toggle('hidden', m==='transferencia');
   calcularCambioPendiente();
 }
 function calcularCambioPendiente(){
-  const line = document.getElementById('cambio-line-pendiente');
-  const v = CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
-  if(pendienteCobroActual.metodo !== 'efectivo'){ line.innerHTML=''; return; }
-  const recibidoVal = document.getElementById('input-recibido-pendiente').value;
-  if(!recibidoVal){ line.innerHTML=''; return; }
-  const cambio = toNum(recibidoVal) - v.total;
-  line.className = 'cambio-line' + (cambio<0 ? ' neg' : '');
-  line.innerHTML = `<span>Cambio a devolver</span><strong>${fmt(Math.abs(cambio))}</strong>`;
-}
-
-async function confirmarCobroPendiente(){
-  const v = CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
+  const line=document.getElementById('cambio-line-pendiente');
+  if(!line || !pendienteCobroActual) return;
+  const v=CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
   if(!v) return;
-  const metodo = pendienteCobroActual.metodo;
-  const recibidoStr = document.getElementById('input-recibido-pendiente') ? document.getElementById('input-recibido-pendiente').value : '';
-  const recibido = metodo==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : v.total) : null;
-  if(metodo==='efectivo' && recibido < v.total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
-  const cambio = recibido!==null ? recibido - v.total : null;
-  const fechaCobro = fechaOperativa();
-  const horaCobro = ahoraStr();
-  const tsCobro = Date.now();
+  const mixto=!!pendienteCobroActual.mixto;
+  if(mixto){
+    const transEl=document.getElementById('input-mixto-transferencia-pendiente');
+    const recEl=document.getElementById('input-mixto-recibido-pendiente');
+    const resumen=document.getElementById('pago-mixto-resumen-pendiente');
+    const trans=transEl && transEl.value!=='' ? toNum(transEl.value) : 0;
+    const efectivo=v.total-trans;
+    if(resumen) resumen.innerHTML = trans>0 && trans<v.total ? `<strong>Efectivo:</strong> ${fmt(efectivo)} · <strong>Transferencia:</strong> ${fmt(trans)}` : 'Ingresa un valor de transferencia entre $1 y el total.';
+    if(trans<=0 || trans>=v.total){ line.innerHTML=''; line.className='cambio-line neg'; return; }
+    const recibido=recEl && recEl.value!=='' ? toNum(recEl.value) : efectivo;
+    const cambio=recibido-efectivo;
+    line.className='cambio-line'+(cambio<0?' neg':'');
+    line.innerHTML=`<span>Cambio a devolver</span><strong>${fmt(Math.max(0,cambio))}</strong>`;
+    return;
+  }
+  if(pendienteCobroActual.metodo!=='efectivo'){ line.innerHTML=''; line.className='cambio-line'; return; }
+  const recibidoVal=document.getElementById('input-recibido-pendiente').value;
+  const recibido=recibidoVal!=='' ? toNum(recibidoVal) : v.total;
+  const cambio=recibido-v.total;
+  line.className='cambio-line'+(cambio<0?' neg':'');
+  line.innerHTML=`<span>Cambio a devolver</span><strong>${fmt(Math.max(0,cambio))}</strong>`;
+}
+async function confirmarCobroPendiente(){
+  const v=CAJA.ventas.find(x=>x.id===pendienteCobroActual.id);
+  if(!v) return;
+  const mixto=!!pendienteCobroActual.mixto;
+  let metodo=pendienteCobroActual.metodo, metodo2=null, monto2=null, recibido=null, cambio=null;
+  if(mixto){
+    const transEl=document.getElementById('input-mixto-transferencia-pendiente');
+    const recEl=document.getElementById('input-mixto-recibido-pendiente');
+    const trans=transEl && transEl.value!=='' ? toNum(transEl.value) : 0;
+    const efectivo=v.total-trans;
+    recibido=recEl && recEl.value!=='' ? toNum(recEl.value) : efectivo;
+    if(trans<=0 || trans>=v.total){ mostrarToast('En pago mixto, la transferencia debe ser menor al total y mayor que $0'); return; }
+    if(recibido<efectivo){ mostrarToast('El efectivo recibido no alcanza para la parte en efectivo'); return; }
+    metodo='efectivo'; metodo2='transferencia'; monto2=trans; cambio=recibido-efectivo;
+  }else if(metodo==='efectivo'){
+    const recibidoStr=document.getElementById('input-recibido-pendiente').value;
+    recibido=recibidoStr!=='' ? toNum(recibidoStr) : v.total;
+    if(recibido<v.total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
+    cambio=recibido-v.total;
+  }
+  const fechaCobro=fechaOperativa(), horaCobro=ahoraStr(), tsCobro=Date.now();
   try{
-    await oUpdate('ventas', v.id, {
+    await oUpdate('ventas',v.id,{
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
-      descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
-      descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-      servicio_porcentaje: v.servicioPorcentaje, servicio_monto: v.servicioMonto||0,
-      total:v.total, metodo, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada',
+      descuento_tipo:v.descuento?v.descuento.tipo:null, descuento_valor:v.descuento?v.descuento.valor:null,
+      descuento_motivo:v.descuento?v.descuento.motivo:null, descuento_monto:v.descuento?v.descuento.monto:0,
+      servicio_porcentaje:v.servicioPorcentaje, servicio_monto:v.servicioMonto||0,
+      total:v.total, metodo, metodo2, monto2, recibido, cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pagada',
       fecha_pago:aOracleFecha(fechaCobro), hora_pago:horaCobro, ts_pago:tsCobro
     });
-    v.metodo = metodo; v.recibido = recibido; v.cambio = cambio; v.estado = 'pagada';
-    v.fechaPago = fechaCobro; v.horaPago = horaCobro; v.tsPago = tsCobro;
-    document.getElementById('modal-root').innerHTML = '';
-    mostrarToast('Cuenta cobrada · ' + fmt(v.total));
-    imprimirVenta(v);
-    renderCaja(); renderResumen(); renderEstadisticas();
+    v.metodo=metodo; v.metodo2=metodo2; v.monto2=monto2; v.recibido=recibido; v.cambio=cambio; v.estado='pagada';
+    v.fechaPago=fechaCobro; v.horaPago=horaCobro; v.tsPago=tsCobro;
+    document.getElementById('modal-root').innerHTML='';
+    mostrarToast('Cuenta cobrada · '+fmt(v.total));
+    imprimirVenta(v); renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){ console.error(e); mostrarToast('No se pudo registrar el cobro en Oracle'); }
 }
-
 function abrirModalDetallePendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
@@ -1832,7 +1899,7 @@ async function guardarDetallePendiente(){
       descuento_tipo: descAGuardar?descAGuardar.tipo:null, descuento_valor: descAGuardar?descAGuardar.valor:null,
       descuento_motivo: descAGuardar?descAGuardar.motivo:null, descuento_monto: descAGuardar?descAGuardar.monto:0,
       servicio_porcentaje: montoServ>0?serv.porcentaje:null, servicio_monto: montoServ,
-      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente',
+      total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente',
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
     v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
@@ -2003,7 +2070,7 @@ async function cerrarCaja(){
   try{
     const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
     const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
-    ventasPend.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
+    ventasPend.forEach(v=>{ const d=desglosePago(v); Object.entries(d).forEach(([m,monto])=>{ porMetodo[m]=(porMetodo[m]||0)+monto; }); });
     const ingresosPend = totalIngresosHoy(), egresosPend = totalEgresosHoy();
     const esperado = CAJA.estado.apertura + (porMetodo.efectivo||0) + ingresosPend - egresosPend;
     const cierreId = uid('c');
@@ -2016,7 +2083,7 @@ async function cerrarCaja(){
       await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
         descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
         descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-        total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada',
+        total:v.total, metodo:v.metodo, metodo2:v.metodo2||null, monto2:v.monto2!=null?v.monto2:null, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada',
         fecha_pago: aOracleFecha(v.fechaPago), hora_pago: v.horaPago, ts_pago: v.tsPago });
       v.cerrada = true;
     }
@@ -2138,6 +2205,13 @@ function vaciarPedido(){
   descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
   servicioActual = { activo:false, porcentaje:0 };
   document.getElementById('input-recibido').value = '';
+  const mixtoTrans=document.getElementById('input-mixto-transferencia'); if(mixtoTrans) mixtoTrans.value='';
+  const mixtoRec=document.getElementById('input-mixto-recibido'); if(mixtoRec) mixtoRec.value='';
+  pagoMixtoActual=false; metodoActual='efectivo';
+  document.querySelectorAll('#metodo-row button').forEach(b=>b.classList.toggle('active', b.dataset.m==='efectivo'));
+  document.getElementById('efectivo-box').classList.remove('hidden');
+  document.getElementById('pago-mixto-box').classList.add('hidden');
+  document.getElementById('cambio-line').classList.remove('hidden');
   document.getElementById('input-nota-venta').value = '';
   document.getElementById('input-mesa').value = '';
   document.getElementById('desc-valor').value = '';
@@ -2246,29 +2320,54 @@ function renderPedido(){
   document.getElementById('btn-agregar-a-pendiente').classList.toggle('hidden', !editandoPendiente);
 }
 function setMetodo(m){
-  metodoActual = m;
+  metodoActual = m==='mixto' ? 'efectivo' : m;
+  pagoMixtoActual = m==='mixto';
   document.querySelectorAll('#metodo-row button').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
   document.getElementById('efectivo-box').classList.toggle('hidden', m!=='efectivo');
-  document.getElementById('cambio-line').classList.toggle('hidden', m!=='efectivo');
+  document.getElementById('pago-mixto-box').classList.toggle('hidden', m!=='mixto');
+  document.getElementById('cambio-line').classList.toggle('hidden', m==='transferencia');
   renderPedido();
 }
 function calcularCambio(){
-  const line = document.getElementById('cambio-line');
-  if(metodoActual !== 'efectivo'){ line.innerHTML=''; return; }
-  const total = totalConServicio();
-  const recibidoVal = document.getElementById('input-recibido').value;
-  if(!recibidoVal){ line.innerHTML=''; document.getElementById('btn-cobrar').disabled = Object.keys(pedido).length===0; return; }
-  const recibido = toNum(recibidoVal);
-  const cambio = recibido - total;
-  line.className = 'cambio-line' + (cambio<0 ? ' neg' : '');
-  line.innerHTML = `<span>Cambio a devolver</span><strong>${fmt(Math.abs(cambio))}</strong>`;
-  document.getElementById('btn-cobrar').disabled = Object.keys(pedido).length===0 || cambio < 0;
+  const line=document.getElementById('cambio-line');
+  const total=totalConServicio();
+  const actualizar=()=>{ const b=document.getElementById('btn-cobrar'); if(b) b.disabled=Object.keys(pedido).length===0 || !metodoValido(total); };
+  if(pagoMixtoActual){
+    const transEl=document.getElementById('input-mixto-transferencia');
+    const recEl=document.getElementById('input-mixto-recibido');
+    const resumen=document.getElementById('pago-mixto-resumen');
+    const trans=transEl && transEl.value!=='' ? toNum(transEl.value) : 0;
+    const efectivo=total-trans;
+    if(resumen) resumen.innerHTML=trans>0 && trans<total ? `<strong>Efectivo:</strong> ${fmt(efectivo)} · <strong>Transferencia:</strong> ${fmt(trans)}` : 'Ingresa cuánto va por transferencia; el resto será efectivo.';
+    if(trans<=0 || trans>=total){ line.innerHTML=''; line.className='cambio-line neg'; actualizar(); return; }
+    const recibido=recEl && recEl.value!=='' ? toNum(recEl.value) : efectivo;
+    const cambio=recibido-efectivo;
+    line.className='cambio-line'+(cambio<0?' neg':'');
+    line.innerHTML=`<span>Cambio a devolver</span><strong>${fmt(Math.max(0,cambio))}</strong>`;
+    actualizar(); return;
+  }
+  if(metodoActual!=='efectivo'){ line.innerHTML=''; line.className='cambio-line'; actualizar(); return; }
+  const recibidoVal=document.getElementById('input-recibido').value;
+  const recibido=recibidoVal!=='' ? toNum(recibidoVal) : total;
+  const cambio=recibido-total;
+  line.className='cambio-line'+(cambio<0?' neg':'');
+  line.innerHTML=`<span>Cambio a devolver</span><strong>${fmt(Math.max(0,cambio))}</strong>`;
+  actualizar();
 }
 function metodoValido(total){
-  if(metodoActual !== 'efectivo') return true;
-  const recibidoStr = document.getElementById('input-recibido').value;
-  if(recibidoStr === '') return true;
-  return toNum(recibidoStr) >= total;
+  if(pagoMixtoActual){
+    const transEl=document.getElementById('input-mixto-transferencia');
+    const recEl=document.getElementById('input-mixto-recibido');
+    const trans=transEl && transEl.value!=='' ? toNum(transEl.value) : 0;
+    if(trans<=0 || trans>=total) return false;
+    const efectivo=total-trans;
+    const recibido=recEl && recEl.value!=='' ? toNum(recEl.value) : efectivo;
+    return recibido>=efectivo;
+  }
+  if(metodoActual!=='efectivo') return true;
+  const recibidoStr=document.getElementById('input-recibido').value;
+  if(recibidoStr==='') return true;
+  return toNum(recibidoStr)>=total;
 }
 function repartirParejo(cantidad, n){
   const base = Math.floor(cantidad/n);
@@ -2416,7 +2515,7 @@ async function confirmarDivision(){
       await oInsert('ventas', {
         id:nv.id, fecha:aOracleFecha(nv.fecha), hora:nv.hora, ts:nv.ts, subtotal:nv.subtotal,
         descuento_tipo:null, descuento_valor:null, descuento_motivo:null, descuento_monto:0,
-        total:nv.total, metodo:null, recibido:null, cambio:null, nota:nv.nota, cajero:nv.cajero, cerrada:0, mesa:nv.mesa, estado:'pendiente'
+        total:nv.total, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:nv.nota, cajero:nv.cajero, cerrada:0, mesa:nv.mesa, estado:'pendiente'
       });
       for(const it of nv.items){
         await oInsert('venta_items', { id:uid('vi'), venta_id:nv.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
@@ -2460,7 +2559,7 @@ async function confirmarAgregarAPendiente(){
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoSubtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-      total:nuevoTotal, metodo:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente',
+      total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente',
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
     await descontarInventarioEnOracle(nuevosItems);
@@ -2521,53 +2620,53 @@ async function dejarPendiente(){
   }
 }
 async function cobrar(){
-  const keys = Object.keys(pedido);
+  const keys=Object.keys(pedido);
   if(!keys.length) return;
-  const subtotal = totalPedido();
-  const montoDesc = calcularMontoDescuento(subtotal);
-  const baseConDesc = Math.max(0, subtotal - montoDesc);
-  const montoServ = calcularMontoServicio(baseConDesc);
-  const total = baseConDesc + montoServ;
-  const recibidoStr = document.getElementById('input-recibido').value;
-  const recibido = metodoActual==='efectivo' ? (recibidoStr!=='' ? toNum(recibidoStr) : total) : null;
-  const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
-  const mesaVal = document.getElementById('input-mesa').value;
-  const venta = {
-    id: uid('v'), ts: Date.now(), fecha: fechaOperativa(), hora: ahoraStr(), items, subtotal, total,
-    descuento: montoDesc>0 ? { ...descuentoActual, monto: montoDesc } : null,
-    servicioPorcentaje: montoServ>0 ? servicioActual.porcentaje : null, servicioMonto: montoServ,
-    metodo: metodoActual, recibido, cambio: recibido!==null ? recibido-total : null,
-    nota: document.getElementById('input-nota-venta').value.trim(), cerrada:false,
-    cajero: nombreUsuarioActual(), mesa: mesaVal ? parseInt(mesaVal,10) : null, estado:'pagada',
-    fechaPago: fechaOperativa(), horaPago: ahoraStr(), tsPago: Date.now()
-  };
-  document.getElementById('btn-cobrar').disabled = true;  
+  const subtotal=totalPedido();
+  const montoDesc=calcularMontoDescuento(subtotal);
+  const baseConDesc=Math.max(0,subtotal-montoDesc);
+  const montoServ=calcularMontoServicio(baseConDesc);
+  const total=baseConDesc+montoServ;
+  let metodo=metodoActual, metodo2=null, monto2=null, recibido=null, cambio=null;
+  if(pagoMixtoActual){
+    const transEl=document.getElementById('input-mixto-transferencia');
+    const recEl=document.getElementById('input-mixto-recibido');
+    const trans=transEl && transEl.value!=='' ? toNum(transEl.value) : 0;
+    const efectivo=total-trans;
+    recibido=recEl && recEl.value!=='' ? toNum(recEl.value) : efectivo;
+    if(trans<=0 || trans>=total){ mostrarToast('En pago mixto, la transferencia debe ser menor al total y mayor que $0'); return; }
+    if(recibido<efectivo){ mostrarToast('El efectivo recibido no alcanza para la parte en efectivo'); return; }
+    metodo='efectivo'; metodo2='transferencia'; monto2=trans; cambio=recibido-efectivo;
+  }else if(metodo==='efectivo'){
+    const recibidoStr=document.getElementById('input-recibido').value;
+    recibido=recibidoStr!=='' ? toNum(recibidoStr) : total;
+    if(recibido<total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
+    cambio=recibido-total;
+  }
+  const items=keys.map(k=>({productoId:pedido[k].productoId,nombre:pedido[k].nombre,precio:pedido[k].precio,cantidad:pedido[k].cantidad}));
+  const mesaVal=document.getElementById('input-mesa').value;
+  const venta={id:uid('v'),ts:Date.now(),fecha:fechaOperativa(),hora:ahoraStr(),items,subtotal,total,
+    descuento:montoDesc>0?{...descuentoActual,monto:montoDesc}:null, servicioPorcentaje:montoServ>0?servicioActual.porcentaje:null, servicioMonto:montoServ,
+    metodo,metodo2,monto2,recibido,cambio,nota:document.getElementById('input-nota-venta').value.trim(),cerrada:false,
+    cajero:nombreUsuarioActual(),mesa:mesaVal?parseInt(mesaVal,10):null,estado:'pagada',fechaPago:fechaOperativa(),horaPago:ahoraStr(),tsPago:Date.now()};
+  document.getElementById('btn-cobrar').disabled=true;
   try{
-    await oInsert('ventas', {
-      id:venta.id, fecha:aOracleFecha(venta.fecha), hora:venta.hora, ts:venta.ts, subtotal:venta.subtotal,
-      descuento_tipo: venta.descuento?venta.descuento.tipo:null, descuento_valor: venta.descuento?venta.descuento.valor:null,
-      descuento_motivo: venta.descuento?venta.descuento.motivo:null, descuento_monto: venta.descuento?venta.descuento.monto:0,
-      servicio_porcentaje: venta.servicioPorcentaje, servicio_monto: venta.servicioMonto||0,
-      total:venta.total, metodo:venta.metodo, recibido:venta.recibido, cambio:venta.cambio, nota:venta.nota, cajero:venta.cajero, cerrada:0, mesa:venta.mesa, estado:'pagada',
-      fecha_pago:aOracleFecha(venta.fechaPago), hora_pago:venta.horaPago, ts_pago:venta.tsPago
+    await oInsert('ventas',{
+      id:venta.id,fecha:aOracleFecha(venta.fecha),hora:venta.hora,ts:venta.ts,subtotal:venta.subtotal,
+      descuento_tipo:venta.descuento?venta.descuento.tipo:null,descuento_valor:venta.descuento?venta.descuento.valor:null,
+      descuento_motivo:venta.descuento?venta.descuento.motivo:null,descuento_monto:venta.descuento?venta.descuento.monto:0,
+      servicio_porcentaje:venta.servicioPorcentaje,servicio_monto:venta.servicioMonto||0,
+      total:venta.total,metodo:venta.metodo,metodo2:venta.metodo2,monto2:venta.monto2,recibido:venta.recibido,cambio:venta.cambio,nota:venta.nota,cajero:venta.cajero,cerrada:0,mesa:venta.mesa,estado:'pagada',
+      fecha_pago:aOracleFecha(venta.fechaPago),hora_pago:venta.horaPago,ts_pago:venta.tsPago
     });
-    for(const it of items){
-      await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
-    }
+    for(const it of items) await oInsert('venta_items',{id:uid('vi'),venta_id:venta.id,producto_id:it.productoId,nombre:it.nombre,precio:it.precio,cantidad:it.cantidad});
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
-    mostrarToast('Venta registrada · ' + fmt(total)); 
-
-    const box = document.getElementById('post-venta-box');
-    box.innerHTML = `<div class="post-venta"><span>Venta guardada ✓</span><button class="btn btn-outline btn-sm" onclick='imprimirVenta(${JSON.stringify(venta).replace(/'/g,"&#39;")})'>Imprimir recibo</button></div>`;
-
-    vaciarPedido();
-    renderCaja(); renderResumen(); renderEstadisticas();
-  }catch(e){
-    console.error(e);
-    mostrarToast('No se pudo guardar la venta en Oracle. Nada se cobró, intenta de nuevo.');
-    document.getElementById('btn-cobrar').disabled = false;
-  }
+    mostrarToast('Venta registrada · '+fmt(total));
+    const box=document.getElementById('post-venta-box');
+    box.innerHTML=`<div class="post-venta"><span>Venta guardada ✓</span><button class="btn btn-outline btn-sm" onclick='imprimirVenta(${JSON.stringify(venta).replace(/'/g,"&#39;")})'>Imprimir recibo</button></div>`;
+    vaciarPedido(); renderCaja(); renderResumen(); renderEstadisticas();
+  }catch(e){ console.error(e); mostrarToast('No se pudo guardar la venta en Oracle. Nada se cobró, intenta de nuevo.'); document.getElementById('btn-cobrar').disabled=false; }
 }
 /* descuenta insumos leyendo el stock más reciente de Oracle justo antes de restar,
    para minimizar el riesgo de choque si dos cajas venden al mismo tiempo */
@@ -2609,7 +2708,7 @@ function renderHistorialVentas(){
         ${v.cajero?`<br><span style="color:var(--concreto); font-size:.7rem;">Atendió: ${v.cajero}</span>`:''}
         ${v.fechaPago && v.fechaPago!==v.fecha ? `<br><span style="color:var(--oro-suave); font-size:.7rem;">Pagado el ${fechaCorta(v.fechaPago)}${v.horaPago?(' · '+v.horaPago):''}</span>` : ''}
       </td>
-      <td>${v.estado==='pendiente' ? '<span class="tag" style="background:rgba(211,162,78,.16); color:var(--oro-suave);">Pendiente</span>' : v.estado==='anulada' ? '<span class="tag" style="background:rgba(138,53,53,.22); color:var(--vino-suave); text-decoration:line-through;">Anulada</span>' : `<span class="tag ${v.metodo}">${METODOS[v.metodo]?.label||v.metodo}</span>`}</td>
+      <td>${v.estado==='pendiente' ? '<span class="tag" style="background:rgba(211,162,78,.16); color:var(--oro-suave);">Pendiente</span>' : v.estado==='anulada' ? '<span class="tag" style="background:rgba(138,53,53,.22); color:var(--vino-suave); text-decoration:line-through;">Anulada</span>' : `<span class="tag ${v.metodo}">${textoPago(v)}</span>`}</td>
       <td class="mono">${fmt(v.total)}</td>
       <td><div class="fila-acciones">
         <button class="link-btn" onclick='imprimirVenta(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Imprimir</button>
@@ -2671,7 +2770,7 @@ async function confirmarAnulacionVenta(){
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
       servicio_porcentaje: v.servicioPorcentaje, servicio_monto: v.servicioMonto||0,
-      total:v.total, metodo:v.metodo, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa,
+      total:v.total, metodo:v.metodo, metodo2:v.metodo2||null, monto2:v.monto2!=null?v.monto2:null, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa,
       estado:'anulada', motivo_anulacion: motivo, anulada_ts: ts, anulada_por: cajero,
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
@@ -2712,9 +2811,9 @@ function imprimirVenta(venta){
     <div class="ri-linea"></div>
     <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
     ${venta.cajero ? `<div class="ri-fila"><span>ATENDIÓ:</span><span>${venta.cajero}</span></div>` : ''}
+    <div class="ri-fila"><span>FORMA PAGO:</span><span>${textoPago(venta)}</span></div>
     ${venta.nota ? `<div class="ri-fila"><span>CLIENTE:</span><span>${venta.nota}</span></div>` : ''}
     ${venta.mesa ? `<div class="ri-fila"><span>MESA:</span><span>${venta.mesa}</span></div>` : ''}
-    <div class="ri-fila"><span>FORMA PAGO:</span><span>${METODOS[venta.metodo]?.label||venta.metodo}</span></div>
     <div class="ri-linea"></div>
         ${venta.items.map(i=>`<div class="ri-fila" style="font-weight:600;"><span>${i.cantidad} x ${i.nombre}</span><span>${fmt(i.precio*i.cantidad)}</span></div>`).join('')}
     <div class="ri-linea"></div>
@@ -2723,7 +2822,7 @@ function imprimirVenta(venta){
     ${venta.servicioMonto>0 ? `<div class="ri-fila"><span>PROPINA (Sugerida):</span><span>${fmt(venta.servicioMonto)}</span></div>` : ''}
     <div class="ri-linea"></div>
     <div class="ri-fila ri-total-final"><span>TOTAL A PAGAR:</span><span>${fmt(venta.total)}</span></div>
-    ${venta.recibido!=null ? `<div class="ri-fila"><span>Recibido</span><span>${fmt(venta.recibido)}</span></div><div class="ri-fila"><span>Cambio</span><span>${fmt(venta.cambio)}</span></div>` : ''}
+    ${venta.recibido!=null ? `<div class="ri-fila"><span>Efectivo recibido</span><span>${fmt(venta.recibido)}</span></div><div class="ri-fila"><span>Cambio</span><span>${fmt(venta.cambio||0)}</span></div>` : ''}
     <div class="ri-linea"></div>
     <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
@@ -3256,7 +3355,7 @@ function renderEstadisticas(){
     </div>`).join('') : '<div class="vacio">Aún no hay ventas en este rango</div>';
 
   const porMetodo = {}; Object.keys(METODOS).forEach(m=>porMetodo[m]=0);
-  ventas.forEach(v=>{ porMetodo[v.metodo] = (porMetodo[v.metodo]||0) + v.total; });
+  ventas.forEach(v=>{ const d=desglosePago(v); Object.entries(d).forEach(([m,monto])=>{ porMetodo[m]=(porMetodo[m]||0)+monto; }); });
   const maxMetodo = Math.max(1, ...Object.values(porMetodo));
   document.getElementById('es-metodos').innerHTML = Object.keys(METODOS).map(m=>`
     <div class="bar-row">
@@ -3308,10 +3407,13 @@ function exportarRespaldoCompleto(){
 }
 function exportarVentasCSV(rango){
   const ventas = rango==='hoy' ? CAJA.ventas.filter(v=>v.fecha===hoyISO()) : CAJA.ventas;
-  const filas = [['Fecha','Hora','Producto','Cantidad','Precio unitario','Subtotal','Total venta','Método','Cajero','Nota']];
+  const filas = [['Fecha','Hora','Producto','Cantidad','Precio unitario','Subtotal','Total venta','Método 1','Valor método 1','Método 2','Valor método 2','Efectivo recibido','Cambio','Cajero','Nota']];
   ventas.forEach(v=>{
+    const d=desglosePago(v);
+    const entries=Object.entries(d).filter(([,m])=>m>0);
+    const e1=entries[0]||[null,0], e2=entries[1]||[null,0];
     v.items.forEach(it=>{
-      filas.push([v.fecha, v.hora, it.nombre, it.cantidad, it.precio, it.precio*it.cantidad, v.total, METODOS[v.metodo]?.label||v.metodo, v.cajero||'', v.nota||'']);
+      filas.push([v.fecha,v.hora,it.nombre,it.cantidad,it.precio,it.precio*it.cantidad,v.total,METODOS[e1[0]]?.label||e1[0]||'',e1[1],METODOS[e2[0]]?.label||e2[0]||'',e2[1],v.recibido??'',v.cambio??'',v.cajero||'',v.nota||'']);
     });
   });
   const csv = filas.map(f=>f.map(csvEscape).join(';')).join('\n');
