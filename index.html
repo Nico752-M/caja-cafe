@@ -1493,7 +1493,7 @@ function renderResumen(){
   const ventasHoy = CAJA.estado.abierta
   ? CAJA.ventas.filter(v=>v.fecha>=desdeResumen && !v.cerrada)
   : [];
-  const ventasHoyValidas = ventasHoy.filter(v=>v.estado!=='anulada');
+  const ventasHoyValidas = ventasHoy.filter(v=>v.estado==='pagada');
   const totalHoy = ventasHoyValidas.reduce((a,v)=>a+v.total,0);
   document.getElementById('stat-ventas-total').textContent = fmt(totalHoy);
   document.getElementById('stat-ventas-count').textContent = ventasHoyValidas.length + (ventasHoyValidas.length===1?' pedido':' pedidos');
@@ -2053,7 +2053,9 @@ function confirmarCierre(){
 function confirmarCierreFinal(){
   const contado = document.getElementById('input-contado').value;
   const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
-  const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  // El efectivo debe salir del desglose real de cada venta, no de v.metodo/v.total.
+  // Esto es imprescindible para pagos mixtos.
+  const efectivo = ventasPend.reduce((a,v)=>a+(desglosePago(v).efectivo||0),0);
   const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   const diff = toNum(contado) - esperado;
   const msg = diff===0
@@ -2118,10 +2120,15 @@ function mostrarModalCierreExitoso(c){
 function renderCierrePreview(){
   /* todo lo pendiente de cerrar, sin filtrar por fecha calendario */
   const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
-  const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
-  const totalTodosMetodos = ventasPend.reduce((a,v)=>a+v.total,0);
+  // Cada venta puede tener uno o dos métodos. Desglosamos el total para que
+  // el efectivo físico y las transferencias queden contabilizados por separado.
   const porMetodoHoy = {}; Object.keys(METODOS).forEach(m=>porMetodoHoy[m]=0);
-  ventasPend.forEach(v=>{ porMetodoHoy[v.metodo] = (porMetodoHoy[v.metodo]||0) + v.total; });
+  ventasPend.forEach(v=>{
+    const d = desglosePago(v);
+    Object.entries(d).forEach(([m,monto])=>{ porMetodoHoy[m]=(porMetodoHoy[m]||0)+monto; });
+  });
+  const efectivo = porMetodoHoy.efectivo || 0;
+  const totalTodosMetodos = ventasPend.reduce((a,v)=>a+v.total,0);
   const desglose = document.getElementById('cierre-desglose-metodos');
   desglose.innerHTML = Object.keys(METODOS).filter(m=>m!=='efectivo').map(m=>`
     <div class="fila-simple" style="opacity:.55; padding-left:14px; font-size:.8rem;"><span class="n">${METODOS[m].label}</span><span class="p mono">${fmt(porMetodoHoy[m])}</span></div>`).join('');
@@ -2140,7 +2147,8 @@ function calcularDiferencia(){
   if(contadoStr===''){ box.innerHTML=''; return; }
   /* todo lo pendiente de cerrar, sin filtrar por fecha calendario */
   const ventasPend = CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada');
-  const efectivo = ventasPend.filter(v=>v.metodo==='efectivo').reduce((a,v)=>a+v.total,0);
+  // Mantener exactamente la misma fórmula del cierre: efectivo por método real.
+  const efectivo = ventasPend.reduce((a,v)=>a+(desglosePago(v).efectivo||0),0);
   const esperado = CAJA.estado.apertura + efectivo + totalIngresosHoy() - totalEgresosHoy();
   const contado = toNum(contadoStr);
   const diff = contado - esperado;
