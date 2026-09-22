@@ -1,6 +1,6 @@
   /* Sube este número cada vez que despliegues cambios nuevos en Vercel,
     si no, los usuarios seguirán viendo la versión vieja guardada en caché. */
-  const CACHE = 'cafe-real-v5';
+  const CACHE = 'cafe-real-v6';
   const SHELL = ['/', '/manifest.json'];
 
   self.addEventListener('install', (e) => {
