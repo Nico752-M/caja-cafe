@@ -3024,8 +3024,11 @@ function abrirModalProducto(id){
     </div>
     <div class="campo">
       <label>Grupo de sabores (opcional)</label>
-      <input type="text" id="pm-grupo" list="pm-grupos-list" value="${p&&p.grupo?p.grupo:''}" placeholder="Ej: Jugos en agua — deja vacío si es un producto normal">
-      <datalist id="pm-grupos-list">${gruposExistentes().map(g=>`<option value="${escaparTexto(g)}">`).join('')}</datalist>
+      <select id="pm-grupo">
+        <option value="">Sin grupo (producto normal)</option>
+        <option value="Jugos en agua" ${p&&p.grupo==='Jugos en agua'?'selected':''}>Jugos en agua</option>
+        <option value="Jugos en leche" ${p&&p.grupo==='Jugos en leche'?'selected':''}>Jugos en leche</option>
+      </select>
     </div>
     <div class="img-ph" style="max-width:200px; aspect-ratio:4/3; margin-bottom:16px;"><span style="font-size:.68rem; color:var(--concreto);">Espacio para foto del producto</span></div>
     <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Receta (consumo de inventario por unidad vendida)</label>
