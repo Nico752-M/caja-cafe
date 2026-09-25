@@ -1342,6 +1342,7 @@ async function cargarDatos(){
 
     PRODUCTOS = { lista: productosRows.map(r=>({
       id:r.id, nombre:r.nombre, cat:r.categoria, precio:Number(r.precio), activo: !!Number(r.activo),
+      grupo: r.grupo || null,
       receta: recetaRows.filter(x=>x.producto_id===r.id).map(x=>({ _rowId:x.id, insumoId:x.insumo_id, cantidad:Number(x.cantidad) }))
     })) };
 
@@ -2174,23 +2175,66 @@ function buildItemGrid(){
   if(buscar){
     pillsEl.style.opacity = '.4'; pillsEl.style.pointerEvents = 'none';
     items = PRODUCTOS.lista.filter(p=>p.activo!==false && p.nombre.toLowerCase().includes(buscar));
-  }else{
-    pillsEl.style.opacity = '1'; pillsEl.style.pointerEvents = 'auto';
-    items = PRODUCTOS.lista.filter(p=>p.cat===catActiva && p.activo!==false);
+    if(!items.length){ el.innerHTML = '<div class="vacio">No se encontró ningún producto</div>'; return; }
+    el.innerHTML = items.map(it=>tileProducto(it)).join('');
+    return;
   }
+  pillsEl.style.opacity = '1'; pillsEl.style.pointerEvents = 'auto';
+  items = PRODUCTOS.lista.filter(p=>p.cat===catActiva && p.activo!==false);
   if(!items.length){ el.innerHTML = '<div class="vacio">No se encontró ningún producto</div>'; return; }
-  el.innerHTML = items.map(it=>{
-    const qty = pedido[it.id] ? pedido[it.id].cantidad : 0;
-    const disponible = stockDisponibleParaProducto(it);
-    const sinStock = disponible <= 0;
-    return `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="agregarItem('${it.id}')" ${sinStock?'disabled':''}>
+
+  const grupos = {}; const sueltos = [];
+  items.forEach(it=>{ if(it.grupo){ (grupos[it.grupo] = grupos[it.grupo] || []).push(it); } else sueltos.push(it); });
+
+  let html = '';
+  Object.keys(grupos).forEach(g=>{
+    const opciones = grupos[g];
+    const sinStock = opciones.every(o=>stockDisponibleParaProducto(o) <= 0);
+    const precios = [...new Set(opciones.map(o=>o.precio))];
+    const precioTxt = precios.length===1 ? fmt(precios[0]) : `Desde ${fmt(Math.min(...precios))}`;
+    const totalEnPedido = opciones.reduce((a,o)=>a+(pedido[o.id]?pedido[o.id].cantidad:0),0);
+    html += `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="abrirModalGrupo('${g.replace(/'/g,"\\'")}')" ${sinStock?'disabled':''}>
+      ${totalEnPedido>0 ? `<div class="badge-qty">${totalEnPedido}</div>` : ''}
+      ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
+      <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgPathFor(g)}" alt="${g}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" onerror="handleImgError(this,'${g.replace(/'/g,"\\'")}','tile')"></div>
+      <div class="nom">${g}</div>
+      <div class="pr mono">${precioTxt}</div>
+    </button>`;
+  });
+  sueltos.forEach(it=>{ html += tileProducto(it); });
+  el.innerHTML = html;
+}
+function tileProducto(it){
+  const qty = pedido[it.id] ? pedido[it.id].cantidad : 0;
+  const disponible = stockDisponibleParaProducto(it);
+  const sinStock = disponible <= 0;
+  return `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="agregarItem('${it.id}')" ${sinStock?'disabled':''}>
       ${qty>0 ? `<div class="badge-qty">${qty}</div>` : ''}
       ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
       <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgPathFor(it.nombre)}" alt="${it.nombre}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" onerror="handleImgError(this,'${it.nombre.replace(/'/g,"\\'")}','tile')"></div>
       <div class="nom">${it.nombre}</div>
       <div class="pr mono">${fmt(it.precio)}</div>
     </button>`;
-  }).join('');
+}
+function abrirModalGrupo(grupo){
+  const opciones = PRODUCTOS.lista.filter(p=>p.grupo===grupo && p.activo!==false);
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <h3 style="margin-bottom:16px;">${grupo}</h3>
+    <div>
+      ${opciones.map(o=>{
+        const sinStock = stockDisponibleParaProducto(o) <= 0;
+        return `<button class="btn btn-outline btn-block" style="margin-bottom:8px; display:flex; justify-content:space-between; ${sinStock?'opacity:.4; pointer-events:none;':''}" onclick="elegirDeGrupo('${o.id}')">
+          <span>${o.nombre}</span><span class="mono">${fmt(o.precio)}${sinStock?' · Sin stock':''}</span>
+        </button>`;
+      }).join('')}
+    </div>
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''" style="margin-top:6px;">Cancelar</button>
+  </div></div>`;
+}
+function elegirDeGrupo(id){
+  agregarItem(id);
+  document.getElementById('modal-root').innerHTML = '';
 }
 function agregarItem(id){
   const it = PRODUCTOS.lista.find(p=>p.id===id);
@@ -2932,7 +2976,10 @@ function verDetalleCierre(c){
 /* =========================================================
    PRODUCTOS (catálogo + recetas)
    ========================================================= */
-function renderProductos(){
+function gruposExistentes(){
+  return [...new Set(PRODUCTOS.lista.map(p=>p.grupo).filter(Boolean))];
+}
+   function renderProductos(){
   const pillsEl = document.getElementById('prod-cat-pills');
   pillsEl.innerHTML = ['<button data-k="todas" class="'+(prodCatActiva==='todas'?'active':'')+'" onclick="setProdCat(\'todas\')">Todas</button>']
     .concat(Object.keys(CATEGORIAS).map(k=>`<button data-k="${k}" class="${k===prodCatActiva?'active':''}" onclick="setProdCat('${k}')">${CATEGORIAS[k]}</button>`)).join('');
@@ -2975,6 +3022,11 @@ function abrirModalProducto(id){
       <div><label>Categoría</label><select id="pm-cat">${Object.keys(CATEGORIAS).map(k=>`<option value="${k}" ${p&&p.cat===k?'selected':''}>${CATEGORIAS[k]}</option>`).join('')}</select></div>
       <div><label>Precio</label><input type="number" id="pm-precio" value="${p?p.precio:''}" placeholder="Ej: 9500"></div>
     </div>
+    <div class="campo">
+      <label>Grupo de sabores (opcional)</label>
+      <input type="text" id="pm-grupo" list="pm-grupos-list" value="${p&&p.grupo?p.grupo:''}" placeholder="Ej: Jugos en agua — deja vacío si es un producto normal">
+      <datalist id="pm-grupos-list">${gruposExistentes().map(g=>`<option value="${escaparTexto(g)}">`).join('')}</datalist>
+    </div>
     <div class="img-ph" style="max-width:200px; aspect-ratio:4/3; margin-bottom:16px;"><span style="font-size:.68rem; color:var(--concreto);">Espacio para foto del producto</span></div>
     <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Receta (consumo de inventario por unidad vendida)</label>
     <div id="pm-receta-rows"></div>
@@ -3010,11 +3062,12 @@ async function guardarProductoModal(id){
   const nombre = document.getElementById('pm-nombre').value.trim();
   const cat = document.getElementById('pm-cat').value;
   const precio = toNum(document.getElementById('pm-precio').value);
+  const grupo = document.getElementById('pm-grupo').value.trim() || null;
   if(!nombre){ mostrarToast('Escribe un nombre para el producto'); return; }
   const receta = recetaTemp.filter(r=>r.insumoId && r.cantidad>0);
   try{
     if(id){
-      await oUpdate('productos', id, { id, nombre, categoria:cat, precio, activo:1 });
+      await oUpdate('productos', id, { id, nombre, categoria:cat, precio, activo:1, grupo });
       const p = PRODUCTOS.lista.find(x=>x.id===id);
       // borra las filas de receta viejas de este producto y crea las nuevas
       for(const r of (p.receta||[])){ if(r._rowId) await oDelete('receta_items', r._rowId); }
@@ -3024,17 +3077,17 @@ async function guardarProductoModal(id){
         await oInsert('receta_items', { id:rowId, producto_id:id, insumo_id:r.insumoId, cantidad:r.cantidad });
         nuevaReceta.push({ _rowId:rowId, insumoId:r.insumoId, cantidad:r.cantidad });
       }
-      if(p){ p.nombre = nombre; p.cat = cat; p.precio = precio; p.receta = nuevaReceta; }
+      if(p){ p.nombre = nombre; p.cat = cat; p.precio = precio; p.grupo = grupo; p.receta = nuevaReceta; }
     }else{
       const nuevoId = uid('p');
-      await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1 });
+      await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1, grupo });
       const nuevaReceta = [];
       for(const r of receta){
         const rowId = uid('r');
         await oInsert('receta_items', { id:rowId, producto_id:nuevoId, insumo_id:r.insumoId, cantidad:r.cantidad });
         nuevaReceta.push({ _rowId:rowId, insumoId:r.insumoId, cantidad:r.cantidad });
       }
-      PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, receta:nuevaReceta, activo:true });
+      PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, grupo, receta:nuevaReceta, activo:true });
     }
     mostrarToast(id ? 'Producto actualizado' : 'Producto creado');
     document.getElementById('modal-root').innerHTML = '';
