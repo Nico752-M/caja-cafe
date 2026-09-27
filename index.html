@@ -845,17 +845,18 @@ html,body{overflow-x:hidden; width:100%;}
         <div><label>Unidad</label>
           <select id="inv-unidad">
             <option value="unidad">unidad</option><option value="g">g</option><option value="kg">kg</option>
-            <option value="ml">ml</option><option value="l">l</option>
+            <option value="ml">ml</option><option value="l">l</option><option value="lb">lb (libras)</option>
           </select>
         </div>
-        <div><label>Stock inicial</label><input type="number" id="inv-stock" min="0" value="0"></div>
-        <div><label>Mínimo</label><input type="number" id="inv-minimo" min="0" value="0"></div>
+        <div><label>Stock inicial</label><input type="number" id="inv-stock" min="0" step="any" value="0"></div>
+        <div><label>Mínimo</label><input type="number" id="inv-minimo" min="0" step="any" value="0"></div>
         <button type="submit" class="btn btn-oro">Agregar</button>
       </form>
     </div>
 
     <div class="card">
       <h3>Insumos registrados <span class="ver-todo" id="inv-count">0</span></h3>
+      <div class="buscador-caja"><input type="text" id="inv-buscar" placeholder="Buscar insumo por nombre…" oninput="renderInventario()"></div>
       <div class="inv-tabla-wrap">
         <table class="inv-tabla">
           <thead><tr><th>Insumo</th><th>Unidad</th><th>Stock</th><th>Mínimo</th><th>Ajustar</th><th></th></tr></thead>
@@ -3087,13 +3088,14 @@ function eliminarProducto(id){
 function abrirModalProducto(id){
   const p = id ? PRODUCTOS.lista.find(x=>x.id===id) : null;
   recetaTemp = p ? p.receta.map(r=>({...r})) : [];
+  recetaFiltroTexto = '';
   const root = document.getElementById('modal-root');
   root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
     <h3>${p ? 'Editar producto' : 'Nuevo producto'}</h3>
     <div class="campo"><label>Nombre</label><input type="text" id="pm-nombre" value="${p?p.nombre:''}" placeholder="Ej: Cappuccino"></div>
     <div class="campo campo-row">
       <div><label>Categoría</label><select id="pm-cat">${Object.keys(CATEGORIAS).map(k=>`<option value="${k}" ${p&&p.cat===k?'selected':''}>${CATEGORIAS[k]}</option>`).join('')}</select></div>
-      <div><label>Precio</label><input type="number" id="pm-precio" value="${p?p.precio:''}" placeholder="Ej: 9500"></div>
+      <div><label>Precio</label><input type="text" id="pm-precio" value="${p?Number(p.precio).toLocaleString('es-CO'):''}" placeholder="Ej: 9.500" inputmode="numeric" oninput="formatearMiles(this)"></div>
     </div>
     <div class="campo">
       <label>Grupo de sabores (opcional)</label>
@@ -3106,6 +3108,7 @@ function abrirModalProducto(id){
     </div>
     <div class="img-ph" style="max-width:200px; aspect-ratio:4/3; margin-bottom:16px;"><span style="font-size:.68rem; color:var(--concreto);">Espacio para foto del producto</span></div>
     <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Receta (consumo de inventario por unidad vendida)</label>
+    <input type="text" id="pm-receta-buscar" placeholder="Buscar insumo para filtrar la lista…" style="margin-bottom:10px;" oninput="filtrarRecetaInsumos(this.value)">
     <div id="pm-receta-rows"></div>
     <button type="button" class="link-btn" onclick="agregarFilaReceta()" style="margin-bottom:16px;">+ Agregar insumo a la receta</button>
     <div class="modal-actions">
@@ -3115,14 +3118,19 @@ function abrirModalProducto(id){
   </div></div>`;
   renderFilasReceta();
 }
+let recetaFiltroTexto = '';
+function filtrarRecetaInsumos(v){ recetaFiltroTexto = v; renderFilasReceta(); }
 function renderFilasReceta(){
   const cont = document.getElementById('pm-receta-rows');
   if(!INVENTARIO.lista.length){ cont.innerHTML = '<div class="vacio">Primero agrega insumos en Inventario</div>'; return; }
+  const filtro = (recetaFiltroTexto||'').trim().toLowerCase();
   cont.innerHTML = recetaTemp.map((r,idx)=>{
     const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId) || INVENTARIO.lista[0];
+    let opciones = filtro ? INVENTARIO.lista.filter(i=>i.nombre.toLowerCase().includes(filtro)) : INVENTARIO.lista;
+    if(filtro && !opciones.some(i=>i.id===r.insumoId) && ins) opciones = [ins, ...opciones];
     return `<div class="receta-row">
       <select onchange="recetaTemp[${idx}].insumoId=this.value; renderFilasReceta();">
-        ${INVENTARIO.lista.map(i=>`<option value="${i.id}" ${i.id===r.insumoId?'selected':''}>${i.nombre}</option>`).join('')}
+        ${opciones.map(i=>`<option value="${i.id}" ${i.id===r.insumoId?'selected':''}>${i.nombre}</option>`).join('')}
       </select>
       <input type="number" min="0" step="any" value="${r.cantidad}" oninput="recetaTemp[${idx}].cantidad=parseFloat(this.value)||0;">
       <button type="button" onclick="recetaTemp.splice(${idx},1); renderFilasReceta();">✕</button>
@@ -3132,7 +3140,10 @@ function renderFilasReceta(){
 }
 function agregarFilaReceta(){
   if(!INVENTARIO.lista.length){ mostrarToast('Primero agrega insumos en Inventario'); return; }
-  recetaTemp.push({ insumoId: INVENTARIO.lista[0].id, cantidad: 1 });
+  const filtro = (recetaFiltroTexto||'').trim().toLowerCase();
+  const disponibles = filtro ? INVENTARIO.lista.filter(i=>i.nombre.toLowerCase().includes(filtro)) : INVENTARIO.lista;
+  const base = disponibles.length ? disponibles[0] : INVENTARIO.lista[0];
+  recetaTemp.push({ insumoId: base.id, cantidad: 1 });
   renderFilasReceta();
 }
 function onCambioGrupoSelect(){
@@ -3165,7 +3176,7 @@ function abrirModalGrupoSabores(){
     </div>
     <div class="campo">
       <label>Precio (aplica a todos los sabores de este grupo)</label>
-      <input type="number" id="gs-precio" placeholder="Ej: 9000">
+      <input type="text" id="gs-precio" placeholder="Ej: 9.000" inputmode="numeric" oninput="formatearMiles(this)">
     </div>
     <div class="campo">
       <label>Agregar sabor</label>
@@ -3279,9 +3290,11 @@ function renderInventario(){
   document.getElementById('inventario-alerta').innerHTML = bajos.length ? `<div class="alerta-stock"><div class="ico">!</div>
     <div class="txt"><b>${bajos.length}</b> insumo${bajos.length>1?'s':''} por debajo del mínimo. Actualiza el stock cuando llegue el pedido al proveedor.</div></div>` : '';
 
-  document.getElementById('inv-count').textContent = INVENTARIO.lista.length;
+  const buscarInv = ((document.getElementById('inv-buscar')||{}).value || '').trim().toLowerCase();
+  const listaFiltrada = buscarInv ? INVENTARIO.lista.filter(i=>i.nombre.toLowerCase().includes(buscarInv)) : INVENTARIO.lista;
+  document.getElementById('inv-count').textContent = listaFiltrada.length + (buscarInv ? ` de ${INVENTARIO.lista.length}` : '');
   const body = document.getElementById('inv-tabla-body');
-  body.innerHTML = INVENTARIO.lista.length ? INVENTARIO.lista.map(i=>{
+  body.innerHTML = listaFiltrada.length ? listaFiltrada.map(i=>{
     const agotado = i.stock <= 0;
     const bajo = !agotado && i.stock <= i.minimo;
     const clase = agotado ? 'agotado' : (bajo ? 'bajo' : 'ok');
@@ -3292,12 +3305,12 @@ function renderInventario(){
       <td class="mono">${i.minimo}</td>
       <td><div style="display:flex; gap:6px;">
         <button class="btn btn-outline btn-sm" onclick="ajustarStock('${i.id}',-1)">–</button>
-        <input class="mini-input" type="number" id="ajuste-${i.id}" placeholder="cant.">
+        <input class="mini-input" type="number" id="ajuste-${i.id}" step="any" placeholder="cant. (ej: 0.5)">
         <button class="btn btn-outline btn-sm" onclick="ajustarStockInput('${i.id}')">+</button>
       </div></td>
       <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="6" class="vacio">Aún no hay insumos registrados</td></tr>`;
+  }).join('') : `<tr><td colspan="6" class="vacio">${buscarInv ? 'No se encontró ningún insumo con ese nombre' : 'Aún no hay insumos registrados'}</td></tr>`;
 }
 async function agregarInsumo(e){
   e.preventDefault();
@@ -3364,10 +3377,10 @@ function abrirModalInsumo(id){
         <select id="im-unidad">
           <option value="unidad" ${i.unidad==='unidad'?'selected':''}>unidad</option><option value="g" ${i.unidad==='g'?'selected':''}>g</option>
           <option value="kg" ${i.unidad==='kg'?'selected':''}>kg</option><option value="ml" ${i.unidad==='ml'?'selected':''}>ml</option>
-          <option value="l" ${i.unidad==='l'?'selected':''}>l</option>
+          <option value="l" ${i.unidad==='l'?'selected':''}>l</option><option value="lb" ${i.unidad==='lb'?'selected':''}>lb (libras)</option>
         </select>
       </div>
-      <div style="text-align:left;"><label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;">Mínimo</label><input type="number" id="im-minimo" value="${i.minimo}"></div>
+      <div style="text-align:left;"><label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:6px;">Mínimo</label><input type="number" id="im-minimo" step="any" value="${i.minimo}"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
