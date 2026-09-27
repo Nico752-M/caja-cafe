@@ -358,9 +358,13 @@ textarea{resize:vertical; min-height:56px;}
 .modal-actions button{flex:1;}
 .modal-box.ancho{max-width:520px; text-align:left; max-height:88vh; overflow-y:auto;}
 .modal-box.ancho h3{font-size:1.1rem; margin-bottom:18px;}
-.receta-row{display:grid; grid-template-columns:1.5fr 90px 30px; gap:8px; margin-bottom:8px; align-items:center;}
+.receta-row{display:grid; grid-template-columns:1.5fr 105px 30px; gap:8px; margin-bottom:10px; align-items:start;}
 .receta-row select,.receta-row input{width:100%;}
 .receta-row button{color:var(--vino-suave); font-size:1rem;}
+.receta-cantidad{display:flex; flex-direction:column; gap:4px;}
+.receta-fracciones{display:flex; gap:3px; flex-wrap:wrap;}
+.receta-fracciones button{border:1px solid var(--linea); color:var(--concreto); background:var(--panel-2); border-radius:5px; padding:3px 5px; font-size:.64rem; line-height:1; font-family:'IBM Plex Mono',monospace;}
+.receta-fracciones button:hover{border-color:var(--oro); color:var(--oro);}
 .receta-unidad{font-size:.7rem; color:var(--concreto); grid-column:1/3; margin-top:-4px; margin-bottom:2px;}
 .receta-buscador-wrap{position:relative; margin-bottom:10px;}
 .receta-buscador-wrap input{width:100%;}
@@ -576,7 +580,7 @@ html,body{overflow-x:hidden; width:100%;}
 @media (max-width:480px){
   .campo-row{grid-template-columns:1fr;}
   .metodo-row{grid-template-columns:1fr 1fr; gap:6px;}
-  .receta-row{grid-template-columns:1fr 70px 26px;}
+  .receta-row{grid-template-columns:1fr 88px 26px;}
   .add-insumo-form{grid-template-columns:1fr;}
   .caja-cerrada{margin:6vh auto; padding:30px 20px;}
 }
@@ -3165,15 +3169,30 @@ function renderFilasReceta(){
   if(!INVENTARIO.lista.length){ cont.innerHTML = '<div class="vacio">Primero agrega insumos en Inventario</div>'; return; }
   cont.innerHTML = recetaTemp.map((r,idx)=>{
     const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId) || INVENTARIO.lista[0];
+    const fracciones = ins.unidad === 'unidad' ? `
+        <div class="receta-fracciones" title="Atajos para cantidades parciales">
+          <button type="button" onclick="ponerCantidadReceta(${idx},0.25)">¼</button>
+          <button type="button" onclick="ponerCantidadReceta(${idx},0.5)">½</button>
+          <button type="button" onclick="ponerCantidadReceta(${idx},0.75)">¾</button>
+          <button type="button" onclick="ponerCantidadReceta(${idx},1)">1</button>
+        </div>` : '';
     return `<div class="receta-row">
       <select onchange="recetaTemp[${idx}].insumoId=this.value; renderFilasReceta();">
         ${INVENTARIO.lista.map(i=>`<option value="${i.id}" ${i.id===r.insumoId?'selected':''}>${i.nombre}</option>`).join('')}
       </select>
-      <input type="number" min="0" step="any" value="${r.cantidad}" oninput="recetaTemp[${idx}].cantidad=parseFloat(this.value)||0;">
+      <div class="receta-cantidad">
+        <input type="number" min="0" step="0.01" value="${r.cantidad}" oninput="recetaTemp[${idx}].cantidad=parseFloat(this.value)||0;">
+        ${fracciones}
+      </div>
       <button type="button" onclick="recetaTemp.splice(${idx},1); renderFilasReceta();">✕</button>
-      <div class="receta-unidad">unidad: ${ins.unidad}</div>
+      <div class="receta-unidad">unidad: ${ins.unidad}${ins.unidad==='unidad' ? ' · admite fracciones' : ''}</div>
     </div>`;
   }).join('');
+}
+function ponerCantidadReceta(idx, cantidad){
+  if(!recetaTemp[idx]) return;
+  recetaTemp[idx].cantidad = cantidad;
+  renderFilasReceta();
 }
 function agregarFilaReceta(){
   const input = document.getElementById('pm-receta-buscar');
