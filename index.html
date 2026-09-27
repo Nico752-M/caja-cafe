@@ -823,7 +823,10 @@ html,body{overflow-x:hidden; width:100%;}
     <div class="eyebrow">Catálogo</div>
     <h2 class="titulo-vista">
       Productos
-      <span class="acciones"><button class="btn btn-oro btn-sm" onclick="abrirModalProducto(null)">+ Nuevo producto</button></span>
+      <span class="acciones">
+        <button class="btn btn-outline btn-sm" onclick="abrirModalGrupoSabores()">+ Grupo de sabores</button>
+        <button class="btn btn-oro btn-sm" onclick="abrirModalProducto(null)">+ Nuevo producto</button>
+      </span>
     </h2>
     <div class="cat-pills" id="prod-cat-pills"></div>
     <div class="prod-grid" id="prod-grid"></div>
@@ -3068,6 +3071,93 @@ function onCambioGrupoSelect(){
   inputNuevo.classList.toggle('hidden', sel !== '__nuevo__');
   if(sel === '__nuevo__') inputNuevo.focus();
 }
+
+/* =========================================================
+   GRUPO DE SABORES — agregar varios sabores rápido, sin repetir
+   categoría/precio/grupo cada vez
+   ========================================================= */
+function abrirModalGrupoSabores(){
+  saboresAgregadosSesion = [];
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Nuevo grupo de sabores</h3>
+    <div class="campo">
+      <label>Categoría</label>
+      <select id="gs-cat">${Object.keys(CATEGORIAS).map(k=>`<option value="${k}">${CATEGORIAS[k]}</option>`).join('')}</select>
+    </div>
+    <div class="campo">
+      <label>Grupo</label>
+      <select id="gs-grupo" onchange="onCambioGrupoSaboresSelect()">
+        ${gruposExistentes().map(g=>`<option value="${g.replace(/"/g,'&quot;')}">${g}</option>`).join('')}
+        <option value="__nuevo__" ${gruposExistentes().length?'':'selected'}>+ Crear nuevo grupo…</option>
+      </select>
+      <input type="text" id="gs-grupo-nuevo" placeholder="Nombre del nuevo grupo (ej: Jugos en agua)" style="margin-top:8px;" class="${gruposExistentes().length?'hidden':''}">
+    </div>
+    <div class="campo">
+      <label>Precio (aplica a todos los sabores de este grupo)</label>
+      <input type="number" id="gs-precio" placeholder="Ej: 9000">
+    </div>
+    <div class="campo">
+      <label>Agregar sabor</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="gs-sabor-nombre" placeholder="Ej: Jugo de mora" onkeydown="if(event.key==='Enter'){event.preventDefault(); agregarSaborAlGrupo();}">
+        <button type="button" class="btn btn-oro btn-sm" onclick="agregarSaborAlGrupo()">Agregar</button>
+      </div>
+    </div>
+    <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Sabores agregados en esta sesión</label>
+    <div id="gs-lista-sabores"><div class="vacio">Aún no has agregado ningún sabor</div></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Listo</button>
+    </div>
+  </div></div>`;
+}
+function onCambioGrupoSaboresSelect(){
+  const sel = document.getElementById('gs-grupo').value;
+  document.getElementById('gs-grupo-nuevo').classList.toggle('hidden', sel !== '__nuevo__');
+}
+function renderListaSaboresGrupo(nombresAgregados){
+  const cont = document.getElementById('gs-lista-sabores');
+  if(!nombresAgregados.length){ cont.innerHTML = '<div class="vacio">Aún no has agregado ningún sabor</div>'; return; }
+  cont.innerHTML = nombresAgregados.map(n=>`<div class="fila-simple"><span class="n">✓ ${n}</span></div>`).join('');
+}
+let saboresAgregadosSesion = [];
+async function agregarSaborAlGrupo(){
+  const nombreInput = document.getElementById('gs-sabor-nombre');
+  const nombre = nombreInput.value.trim();
+  const cat = document.getElementById('gs-cat').value;
+  const precio = toNum(document.getElementById('gs-precio').value);
+  let grupoSel = document.getElementById('gs-grupo').value;
+  if(grupoSel === '__nuevo__'){
+    grupoSel = document.getElementById('gs-grupo-nuevo').value.trim();
+    if(!grupoSel){ mostrarToast('Escribe el nombre del nuevo grupo'); return; }
+  }
+  if(!nombre){ mostrarToast('Escribe el nombre del sabor'); return; }
+  if(precio<=0){ mostrarToast('Ingresa el precio del grupo'); return; }
+  try{
+    const nuevoId = uid('p');
+    await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1, grupo:grupoSel });
+    PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, grupo:grupoSel, receta:[], activo:true });
+    saboresAgregadosSesion.push(nombre);
+    renderListaSaboresGrupo(saboresAgregadosSesion);
+    nombreInput.value = '';
+    nombreInput.focus();
+    /* si el grupo era nuevo, ya quedó creado: lo dejamos fijo para que los siguientes sabores lo reutilicen */
+    if(document.getElementById('gs-grupo').value === '__nuevo__'){
+      const sel = document.getElementById('gs-grupo');
+      const yaExiste = [...sel.options].some(o=>o.value===grupoSel);
+      if(!yaExiste){
+        const opt = document.createElement('option');
+        opt.value = grupoSel; opt.textContent = grupoSel;
+        sel.insertBefore(opt, sel.querySelector('option[value="__nuevo__"]'));
+      }
+      sel.value = grupoSel;
+      onCambioGrupoSaboresSelect();
+    }
+    renderProductos(); renderCaja();
+    mostrarToast('Sabor "'+nombre+'" agregado');
+  }catch(e){ console.error(e); mostrarToast('No se pudo guardar el sabor en Oracle'); }
+}
+
 async function guardarProductoModal(id){
   const nombre = document.getElementById('pm-nombre').value.trim();
   const cat = document.getElementById('pm-cat').value;
