@@ -362,6 +362,14 @@ textarea{resize:vertical; min-height:56px;}
 .receta-row select,.receta-row input{width:100%;}
 .receta-row button{color:var(--vino-suave); font-size:1rem;}
 .receta-unidad{font-size:.7rem; color:var(--concreto); grid-column:1/3; margin-top:-4px; margin-bottom:2px;}
+.receta-buscador-wrap{position:relative; margin-bottom:10px;}
+.receta-buscador-wrap input{width:100%;}
+.receta-resultados{position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:20; max-height:220px; overflow-y:auto; background:var(--panel); border:1px solid var(--linea-fuerte); border-radius:9px; box-shadow:0 10px 24px rgba(0,0,0,.14);}
+.receta-resultado{width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; text-align:left; border-bottom:1px solid var(--linea); font-size:.82rem;}
+.receta-resultado:last-child{border-bottom:none;}
+.receta-resultado:hover{background:var(--panel-2);}
+.receta-resultado small{color:var(--concreto); white-space:nowrap;}
+.receta-sin-resultados{padding:12px; font-size:.78rem; color:var(--concreto); text-align:center;}
 
 /* ---------------- PLANO DE MESAS ---------------- */
 .mesas-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:10px;}
@@ -3108,7 +3116,10 @@ function abrirModalProducto(id){
     </div>
     <div class="img-ph" style="max-width:200px; aspect-ratio:4/3; margin-bottom:16px;"><span style="font-size:.68rem; color:var(--concreto);">Espacio para foto del producto</span></div>
     <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Receta (consumo de inventario por unidad vendida)</label>
-    <input type="text" id="pm-receta-buscar" placeholder="Buscar insumo para filtrar la lista…" style="margin-bottom:10px;" oninput="filtrarRecetaInsumos(this.value)">
+    <div class="receta-buscador-wrap">
+      <input type="text" id="pm-receta-buscar" placeholder="Escribe el insumo para agregarlo…" autocomplete="off" oninput="buscarInsumoParaReceta(this.value)" onfocus="mostrarResultadosReceta(this.value)">
+      <div id="pm-receta-resultados" class="receta-resultados hidden"></div>
+    </div>
     <div id="pm-receta-rows"></div>
     <button type="button" class="link-btn" onclick="agregarFilaReceta()" style="margin-bottom:16px;">+ Agregar insumo a la receta</button>
     <div class="modal-actions">
@@ -3120,17 +3131,43 @@ function abrirModalProducto(id){
 }
 let recetaFiltroTexto = '';
 function filtrarRecetaInsumos(v){ recetaFiltroTexto = v; renderFilasReceta(); }
+
+function mostrarResultadosReceta(v){
+  const box = document.getElementById('pm-receta-resultados');
+  if(!box) return;
+  const filtro = (v||'').trim().toLowerCase();
+  const lista = filtro ? INVENTARIO.lista.filter(i=>i.nombre.toLowerCase().includes(filtro)) : INVENTARIO.lista.slice(0,20);
+  box.innerHTML = lista.length ? lista.map(i=>`<button type="button" class="receta-resultado" onclick="seleccionarInsumoReceta('${i.id}')"><span>${i.nombre}</span><small>${i.unidad}</small></button>`).join('') : '<div class="receta-sin-resultados">No se encontró ese insumo</div>';
+  box.classList.remove('hidden');
+}
+function buscarInsumoParaReceta(v){
+  recetaFiltroTexto = v;
+  mostrarResultadosReceta(v);
+}
+function seleccionarInsumoReceta(id){
+  const ins = INVENTARIO.lista.find(i=>i.id===id);
+  if(!ins) return;
+  const existente = recetaTemp.find(r=>r.insumoId===id);
+  if(existente){
+    mostrarToast('Ese insumo ya está en la receta');
+    document.getElementById('pm-receta-buscar').value = '';
+    document.getElementById('pm-receta-resultados').classList.add('hidden');
+    return;
+  }
+  recetaTemp.push({ insumoId:id, cantidad:1 });
+  document.getElementById('pm-receta-buscar').value = '';
+  recetaFiltroTexto = '';
+  document.getElementById('pm-receta-resultados').classList.add('hidden');
+  renderFilasReceta();
+}
 function renderFilasReceta(){
   const cont = document.getElementById('pm-receta-rows');
   if(!INVENTARIO.lista.length){ cont.innerHTML = '<div class="vacio">Primero agrega insumos en Inventario</div>'; return; }
-  const filtro = (recetaFiltroTexto||'').trim().toLowerCase();
   cont.innerHTML = recetaTemp.map((r,idx)=>{
     const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId) || INVENTARIO.lista[0];
-    let opciones = filtro ? INVENTARIO.lista.filter(i=>i.nombre.toLowerCase().includes(filtro)) : INVENTARIO.lista;
-    if(filtro && !opciones.some(i=>i.id===r.insumoId) && ins) opciones = [ins, ...opciones];
     return `<div class="receta-row">
       <select onchange="recetaTemp[${idx}].insumoId=this.value; renderFilasReceta();">
-        ${opciones.map(i=>`<option value="${i.id}" ${i.id===r.insumoId?'selected':''}>${i.nombre}</option>`).join('')}
+        ${INVENTARIO.lista.map(i=>`<option value="${i.id}" ${i.id===r.insumoId?'selected':''}>${i.nombre}</option>`).join('')}
       </select>
       <input type="number" min="0" step="any" value="${r.cantidad}" oninput="recetaTemp[${idx}].cantidad=parseFloat(this.value)||0;">
       <button type="button" onclick="recetaTemp.splice(${idx},1); renderFilasReceta();">✕</button>
@@ -3139,13 +3176,16 @@ function renderFilasReceta(){
   }).join('');
 }
 function agregarFilaReceta(){
-  if(!INVENTARIO.lista.length){ mostrarToast('Primero agrega insumos en Inventario'); return; }
-  const filtro = (recetaFiltroTexto||'').trim().toLowerCase();
-  const disponibles = filtro ? INVENTARIO.lista.filter(i=>i.nombre.toLowerCase().includes(filtro)) : INVENTARIO.lista;
-  const base = disponibles.length ? disponibles[0] : INVENTARIO.lista[0];
-  recetaTemp.push({ insumoId: base.id, cantidad: 1 });
-  renderFilasReceta();
+  const input = document.getElementById('pm-receta-buscar');
+  if(input){ input.focus(); mostrarResultadosReceta(input.value); }
 }
+
+document.addEventListener('click', function(e){
+  const wrap = document.querySelector('.receta-buscador-wrap');
+  const box = document.getElementById('pm-receta-resultados');
+  if(wrap && box && !wrap.contains(e.target)) box.classList.add('hidden');
+});
+
 function onCambioGrupoSelect(){
   const sel = document.getElementById('pm-grupo').value;
   const inputNuevo = document.getElementById('pm-grupo-nuevo');
