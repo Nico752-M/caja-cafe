@@ -724,9 +724,8 @@ html,body{overflow-x:hidden; width:100%;}
           </div>
           <button type="button" class="link-btn solo-admin" id="btn-toggle-descuento" onclick="toggleDescuentoForm()">+ Descuento / cortesía</button>
           <div id="descuento-form" class="hidden solo-admin" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <select id="desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
-            <input type="number" id="desc-valor" placeholder="Ej: 10">
-            <input type="text" id="desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
+           <select id="desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
+            <input type="text" id="desc-valor" placeholder="Ej: 10" inputmode="numeric" oninput="formatearMiles(this)">            <input type="text" id="desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
             <button type="button" class="btn btn-oro btn-sm" onclick="aplicarDescuento()">Aplicar</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="quitarDescuento()">Quitar</button>
           </div>
@@ -750,14 +749,14 @@ html,body{overflow-x:hidden; width:100%;}
             <button data-m="mixto" onclick="setMetodo('mixto')">Mixto</button>
           </div>
 
-          <div class="efectivo-box solo-admin" id="efectivo-box">
-            <input type="number" id="input-recibido" placeholder="Recibido en efectivo" inputmode="numeric" oninput="calcularCambio()">
+         <div class="efectivo-box solo-admin" id="efectivo-box">
+            <input type="text" id="input-recibido" placeholder="Recibido en efectivo" inputmode="numeric" oninput="formatearMiles(this); calcularCambio()">
           </div>
           <div class="pago-mixto-box solo-admin hidden" id="pago-mixto-box">
             <div class="ayuda">Pago mixto = <strong>efectivo + transferencia</strong>. Escribe cuánto paga por transferencia y el resto queda en efectivo.</div>
             <div class="pago-mixto-grid">
-              <input type="number" id="input-mixto-transferencia" placeholder="Valor por transferencia" inputmode="numeric" oninput="calcularCambio()">
-              <input type="number" id="input-mixto-recibido" placeholder="Efectivo recibido (opcional)" inputmode="numeric" oninput="calcularCambio()">
+             <input type="text" id="input-mixto-transferencia" placeholder="Valor por transferencia" inputmode="numeric" oninput="formatearMiles(this); calcularCambio()">
+              <input type="text" id="input-mixto-recibido" placeholder="Efectivo recibido (opcional)" inputmode="numeric" oninput="formatearMiles(this); calcularCambio()">
             </div>
             <div class="pago-mixto-resumen" id="pago-mixto-resumen"></div>
           </div>
@@ -828,6 +827,7 @@ html,body{overflow-x:hidden; width:100%;}
         <button class="btn btn-oro btn-sm" onclick="abrirModalProducto(null)">+ Nuevo producto</button>
       </span>
     </h2>
+    <div class="buscador-caja"><input type="text" id="prod-buscar" placeholder="Buscar producto por nombre…" oninput="renderProductos()"></div>
     <div class="cat-pills" id="prod-cat-pills"></div>
     <div class="prod-grid" id="prod-grid"></div>
   </section>
@@ -1656,14 +1656,14 @@ function abrirModalCobroPendiente(id){
       <button data-m="transferencia" onclick="setMetodoPendiente('transferencia')">Transf.</button>
       <button data-m="mixto" onclick="setMetodoPendiente('mixto')">Mixto</button>
     </div>
-    <div class="efectivo-box" id="efectivo-box-pendiente" style="margin-top:12px;">
-      <input type="number" id="input-recibido-pendiente" placeholder="Recibido en efectivo" inputmode="numeric" oninput="calcularCambioPendiente()">
+   <div class="efectivo-box" id="efectivo-box-pendiente" style="margin-top:12px;">
+      <input type="text" id="input-recibido-pendiente" placeholder="Recibido en efectivo" inputmode="numeric" oninput="formatearMiles(this); calcularCambioPendiente()">
     </div>
     <div class="pago-mixto-box hidden" id="pago-mixto-box-pendiente">
       <div class="ayuda">Escribe cuánto paga por transferencia y el resto queda en efectivo.</div>
       <div class="pago-mixto-grid">
-        <input type="number" id="input-mixto-transferencia-pendiente" placeholder="Valor por transferencia" inputmode="numeric" oninput="calcularCambioPendiente()">
-        <input type="number" id="input-mixto-recibido-pendiente" placeholder="Efectivo recibido (opcional)" inputmode="numeric" oninput="calcularCambioPendiente()">
+        <input type="text" id="input-mixto-transferencia-pendiente" placeholder="Valor por transferencia" inputmode="numeric" oninput="formatearMiles(this); calcularCambioPendiente()">
+        <input type="text" id="input-mixto-recibido-pendiente" placeholder="Efectivo recibido (opcional)" inputmode="numeric" oninput="formatearMiles(this); calcularCambioPendiente()">
       </div>
       <div class="pago-mixto-resumen" id="pago-mixto-resumen-pendiente"></div>
     </div>
@@ -1778,9 +1778,8 @@ function pendCalcularMontoServicio(base){
 function pendToggleDescuentoForm(){ document.getElementById('pend-descuento-form').classList.toggle('hidden'); }
 function pendAplicarDescuento(){
   const tipo = document.getElementById('pend-desc-tipo').value;
-  const valor = parseFloat(document.getElementById('pend-desc-valor').value)||0;
-  const motivo = document.getElementById('pend-desc-motivo').value.trim();
-  if(tipo!=='cortesia' && valor<=0){ mostrarToast('Ingresa un valor de descuento válido'); return; }
+  const valor = toNum(document.getElementById('pend-desc-valor').value)||0;
+  const motivo = document.getElementById('pend-desc-motivo').value.trim();  if(tipo!=='cortesia' && valor<=0){ mostrarToast('Ingresa un valor de descuento válido'); return; }
   if(!motivo){ mostrarToast('Escribe un motivo (ej: cliente frecuente, error de cocina)'); return; }
   detalleEditTemp.descuento = { tipo, valor: tipo==='cortesia' ? 100 : valor, motivo };
   renderModalDetallePendiente();
@@ -1832,8 +1831,8 @@ function renderModalDetallePendiente(){
     <div class="solo-admin">
     <button type="button" class="link-btn" onclick="pendToggleDescuentoForm()">${montoDesc>0?'Editar descuento / cortesía':'+ Descuento / cortesía'}</button>
     <div id="pend-descuento-form" class="hidden" style="margin:10px 0; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-      <select id="pend-desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
-      <input type="number" id="pend-desc-valor" placeholder="Ej: 10">
+     <select id="pend-desc-tipo"><option value="porcentaje">% Porcentaje</option><option value="valor">$ Valor fijo</option><option value="cortesia">Cortesía (100%)</option></select>
+      <input type="text" id="pend-desc-valor" placeholder="Ej: 10" inputmode="numeric" oninput="formatearMiles(this)">
       <input type="text" id="pend-desc-motivo" placeholder="Motivo (ej: cliente frecuente)" style="grid-column:1/3;">
       <button type="button" class="btn btn-oro btn-sm" onclick="pendAplicarDescuento()">Aplicar</button>
       <button type="button" class="btn btn-outline btn-sm" onclick="pendQuitarDescuento()">Quitar</button>
@@ -2296,7 +2295,7 @@ function totalConDescuento(){
 function toggleDescuentoForm(){ document.getElementById('descuento-form').classList.toggle('hidden'); }
 function aplicarDescuento(){
   const tipo = document.getElementById('desc-tipo').value;
-  const valor = parseFloat(document.getElementById('desc-valor').value)||0;
+  const valor = toNum(document.getElementById('desc-valor').value)||0;
   const motivo = document.getElementById('desc-motivo').value.trim();
   if(tipo!=='cortesia' && valor<=0){ mostrarToast('Ingresa un valor de descuento válido'); return; }
   if(!motivo){ mostrarToast('Escribe un motivo (ej: cliente frecuente, error de cocina)'); return; }
@@ -2994,7 +2993,8 @@ function gruposExistentes(){
     .concat(Object.keys(CATEGORIAS).map(k=>`<button data-k="${k}" class="${k===prodCatActiva?'active':''}" onclick="setProdCat('${k}')">${CATEGORIAS[k]}</button>`)).join('');
 
   const grid = document.getElementById('prod-grid');
-  const items = PRODUCTOS.lista.filter(p=>prodCatActiva==='todas' || p.cat===prodCatActiva);
+  const buscarProd = ((document.getElementById('prod-buscar')||{}).value || '').trim().toLowerCase();
+  const items = PRODUCTOS.lista.filter(p=>(prodCatActiva==='todas' || p.cat===prodCatActiva) && (!buscarProd || p.nombre.toLowerCase().includes(buscarProd)));
   grid.innerHTML = items.map(p=>{
     const tieneReceta = p.receta && p.receta.length;
     return `<div class="prod-card">
