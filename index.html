@@ -1157,6 +1157,9 @@ function slugify(nombre){
 function imgPathFor(nombre){
   return `images/menu/${slugify(nombre)}.webp`;
 }
+function imgSrcFor(p){
+  return p && p.imagenUrl ? p.imagenUrl : imgPathFor(p ? p.nombre : '');
+}
 function handleImgError(img, nombre, variante){
   const ph = img.parentElement;
   if(variante === 'tile'){
@@ -1345,7 +1348,7 @@ async function cargarDatos(){
 
     PRODUCTOS = { lista: productosRows.map(r=>({
       id:r.id, nombre:r.nombre, cat:r.categoria, precio:Number(r.precio), activo: !!Number(r.activo),
-      grupo: r.grupo || null,
+      grupo: r.grupo || null, imagenUrl: r.imagen_url || null,
       receta: recetaRows.filter(x=>x.producto_id===r.id).map(x=>({ _rowId:x.id, insumoId:x.insumo_id, cantidad:Number(x.cantidad) }))
     })) };
 
@@ -2214,7 +2217,7 @@ function tileProducto(it){
   return `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="agregarItem('${it.id}')" ${sinStock?'disabled':''}>
       ${qty>0 ? `<div class="badge-qty">${qty}</div>` : ''}
       ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
-      <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgPathFor(it.nombre)}" alt="${it.nombre}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" onerror="handleImgError(this,'${it.nombre.replace(/'/g,"\\'")}','tile')"></div>
+      <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgSrcFor(it)}" alt="${it.nombre}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" onerror="handleImgError(this,'${it.nombre.replace(/'/g,"\\'")}','tile')"></div>
       <div class="nom">${it.nombre}</div>
       <div class="pr mono">${fmt(it.precio)}</div>
     </button>`;
@@ -2992,7 +2995,7 @@ function gruposExistentes(){
   grid.innerHTML = items.map(p=>{
     const tieneReceta = p.receta && p.receta.length;
     return `<div class="prod-card">
-      <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgPathFor(p.nombre)}" alt="${p.nombre}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="handleImgError(this,'${p.nombre.replace(/'/g,"\\'")}','card')"></div>
+      <div class="img-ph" style="padding:0; overflow:hidden; cursor:pointer;" onclick="abrirModalFoto('${p.id}')"><img src="${imgSrcFor(p)}" alt="${p.nombre}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" onerror="handleImgError(this,'${p.nombre.replace(/'/g,"\\'")}','card')"></div>
       <div class="nom">${p.nombre}</div>
       <div class="pr">${fmt(p.precio)}</div>
       <div class="receta-tag ${tieneReceta?'ok':''}">${tieneReceta ? '✓ '+p.receta.length+' insumo'+(p.receta.length>1?'s':'')+' en receta' : 'Sin receta de inventario'}</div>
@@ -3004,6 +3007,71 @@ function gruposExistentes(){
   }).join('') + `<div class="prod-card add-prod-card" onclick="abrirModalProducto(null)"><div class="plus">+</div>Nuevo producto</div>`;
 }
 function setProdCat(k){ prodCatActiva = k; renderProductos(); }
+const WORKER_UPLOAD_URL = ''; // pega aquí la URL de tu Worker de Cloudflare cuando lo tengas
+
+function archivoAWebp(file, maxAncho=900, calidad=0.82){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      const escala = Math.min(1, maxAncho / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * escala;
+      canvas.height = img.height * escala;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob=>{ URL.revokeObjectURL(url); resolve(blob); }, 'image/webp', calidad);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function abrirModalFoto(id){
+  const p = PRODUCTOS.lista.find(x=>x.id===id);
+  if(!p) return;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <h3 style="margin-bottom:16px;">Foto de ${p.nombre}</h3>
+    <button class="btn btn-oro btn-block" onclick="document.getElementById('file-foto-${id}').click()">📁 Elegir foto del dispositivo</button>
+    <input type="file" id="file-foto-${id}" accept="image/*" class="hidden" onchange="subirArchivoProducto('${id}', this.files[0])">
+    <div style="text-align:center; font-size:.72rem; color:var(--concreto); margin:14px 0;">— o —</div>
+    <input type="text" id="url-foto-${id}" placeholder="Pega el link de una imagen">
+    <button class="btn btn-outline btn-block" style="margin-top:10px;" onclick="guardarUrlProducto('${id}')">Usar este link</button>
+    ${p.imagenUrl ? `<button class="btn btn-vino btn-block" style="margin-top:10px;" onclick="quitarImagenProducto('${id}')">Quitar foto actual</button>` : ''}
+    <button class="btn btn-outline btn-block" style="margin-top:10px;" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+  </div></div>`;
+}
+function guardarUrlProducto(id){
+  const url = document.getElementById('url-foto-'+id).value.trim();
+  if(!url){ mostrarToast('Pega un link válido'); return; }
+  actualizarImagenProducto(id, url);
+}
+function quitarImagenProducto(id){ actualizarImagenProducto(id, null); }
+async function actualizarImagenProducto(id, url){
+  const p = PRODUCTOS.lista.find(x=>x.id===id);
+  if(!p) return;
+  try{
+    await oUpdate('productos', id, { id, nombre:p.nombre, categoria:p.cat, precio:p.precio, activo:1, grupo:p.grupo, imagen_url:url });
+    p.imagenUrl = url;
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast(url ? 'Foto actualizada' : 'Foto quitada');
+    renderProductos(); renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo guardar la foto en Oracle'); }
+}
+async function subirArchivoProducto(id, file){
+  if(!file) return;
+  if(!WORKER_UPLOAD_URL){ mostrarToast('La subida de archivos aún no está configurada. Por ahora usa el link.'); return; }
+  mostrarToast('Subiendo imagen…');
+  try{
+    const webpBlob = await archivoAWebp(file);
+    const nombreArchivo = id + '-' + Date.now() + '.webp';
+    const resp = await fetch(WORKER_UPLOAD_URL, { method:'POST', headers:{'Content-Type':'image/webp','X-Filename':nombreArchivo}, body: webpBlob });
+    if(!resp.ok) throw new Error('Falló la subida');
+    const { url } = await resp.json();
+    await actualizarImagenProducto(id, url);
+  }catch(e){ console.error(e); mostrarToast('No se pudo subir la imagen'); }
+}
+
 function eliminarProducto(id){
   confirmar('¿Eliminar este producto del catálogo?', async ()=>{
     try{
@@ -3135,8 +3203,8 @@ async function agregarSaborAlGrupo(){
   if(precio<=0){ mostrarToast('Ingresa el precio del grupo'); return; }
   try{
     const nuevoId = uid('p');
-    await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1, grupo:grupoSel });
-    PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, grupo:grupoSel, receta:[], activo:true });
+    await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1, grupo:grupoSel, imagen_url:null });
+    PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, grupo:grupoSel, imagenUrl:null, receta:[], activo:true });  
     saboresAgregadosSesion.push(nombre);
     renderListaSaboresGrupo(saboresAgregadosSesion);
     nombreInput.value = '';
@@ -3172,8 +3240,9 @@ async function guardarProductoModal(id){
   const receta = recetaTemp.filter(r=>r.insumoId && r.cantidad>0);
   try{
     if(id){
-      await oUpdate('productos', id, { id, nombre, categoria:cat, precio, activo:1, grupo });
-      const p = PRODUCTOS.lista.find(x=>x.id===id);
+      const pExistente = PRODUCTOS.lista.find(x=>x.id===id);
+      await oUpdate('productos', id, { id, nombre, categoria:cat, precio, activo:1, grupo, imagen_url: pExistente ? pExistente.imagenUrl||null : null });
+      const p = pExistente;
       // borra las filas de receta viejas de este producto y crea las nuevas
       for(const r of (p.receta||[])){ if(r._rowId) await oDelete('receta_items', r._rowId); }
       const nuevaReceta = [];
@@ -3185,14 +3254,14 @@ async function guardarProductoModal(id){
       if(p){ p.nombre = nombre; p.cat = cat; p.precio = precio; p.grupo = grupo; p.receta = nuevaReceta; }
     }else{
       const nuevoId = uid('p');
-      await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1, grupo });
+      await oInsert('productos', { id:nuevoId, nombre, categoria:cat, precio, activo:1, grupo, imagen_url:null });
       const nuevaReceta = [];
       for(const r of receta){
         const rowId = uid('r');
         await oInsert('receta_items', { id:rowId, producto_id:nuevoId, insumo_id:r.insumoId, cantidad:r.cantidad });
         nuevaReceta.push({ _rowId:rowId, insumoId:r.insumoId, cantidad:r.cantidad });
       }
-      PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, grupo, receta:nuevaReceta, activo:true });
+      PRODUCTOS.lista.push({ id:nuevoId, nombre, cat, precio, grupo, imagenUrl:null, receta:nuevaReceta, activo:true });
     }
     mostrarToast(id ? 'Producto actualizado' : 'Producto creado');
     document.getElementById('modal-root').innerHTML = '';
