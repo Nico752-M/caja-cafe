@@ -2199,10 +2199,12 @@ function buildItemGrid(){
     const precios = [...new Set(opciones.map(o=>o.precio))];
     const precioTxt = precios.length===1 ? fmt(precios[0]) : `Desde ${fmt(Math.min(...precios))}`;
     const totalEnPedido = opciones.reduce((a,o)=>a+(pedido[o.id]?pedido[o.id].cantidad:0),0);
+    const opcionConFoto = opciones.find(o=>o.imagenUrl);
+    const imgGrupoSrc = opcionConFoto ? opcionConFoto.imagenUrl : imgPathFor(g);
     html += `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="abrirModalGrupo('${g.replace(/'/g,"\\'")}')" ${sinStock?'disabled':''}>
       ${totalEnPedido>0 ? `<div class="badge-qty">${totalEnPedido}</div>` : ''}
       ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
-      <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgPathFor(g)}" alt="${g}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" onerror="handleImgError(this,'${g.replace(/'/g,"\\'")}','tile')"></div>
+      <div class="img-ph" style="padding:0; overflow:hidden;"><img src="${imgGrupoSrc}" alt="${g}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" onerror="handleImgError(this,'${g.replace(/'/g,"\\'")}','tile')"></div>
       <div class="nom">${g}</div>
       <div class="pr mono">${precioTxt}</div>
     </button>`;
