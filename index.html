@@ -3007,7 +3007,7 @@ function gruposExistentes(){
   }).join('') + `<div class="prod-card add-prod-card" onclick="abrirModalProducto(null)"><div class="plus">+</div>Nuevo producto</div>`;
 }
 function setProdCat(k){ prodCatActiva = k; renderProductos(); }
-const WORKER_UPLOAD_URL = ''; // pega aquí la URL de tu Worker de Cloudflare cuando lo tengas
+const WORKER_UPLOAD_URL = 'https://cafe-real-subida-imagenes.alejolopezdominguez123.workers.dev'; // pega aquí la URL de tu Worker de Cloudflare cuando lo tengas
 
 function archivoAWebp(file, maxAncho=900, calidad=0.82){
   return new Promise((resolve, reject)=>{
