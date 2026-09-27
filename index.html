@@ -3024,11 +3024,12 @@ function abrirModalProducto(id){
     </div>
     <div class="campo">
       <label>Grupo de sabores (opcional)</label>
-      <select id="pm-grupo">
+      <select id="pm-grupo" onchange="onCambioGrupoSelect()">
         <option value="">Sin grupo (producto normal)</option>
-        <option value="Jugos en agua" ${p&&p.grupo==='Jugos en agua'?'selected':''}>Jugos en agua</option>
-        <option value="Jugos en leche" ${p&&p.grupo==='Jugos en leche'?'selected':''}>Jugos en leche</option>
+        ${gruposExistentes().map(g=>`<option value="${g.replace(/"/g,'&quot;')}" ${p&&p.grupo===g?'selected':''}>${g}</option>`).join('')}
+        <option value="__nuevo__">+ Crear nuevo grupo…</option>
       </select>
+      <input type="text" id="pm-grupo-nuevo" placeholder="Nombre del nuevo grupo (ej: Limonada de coco)" class="hidden" style="margin-top:8px;">
     </div>
     <div class="img-ph" style="max-width:200px; aspect-ratio:4/3; margin-bottom:16px;"><span style="font-size:.68rem; color:var(--concreto);">Espacio para foto del producto</span></div>
     <label style="display:block; font-size:.72rem; letter-spacing:.05em; text-transform:uppercase; color:var(--concreto); margin-bottom:8px;">Receta (consumo de inventario por unidad vendida)</label>
@@ -3061,11 +3062,22 @@ function agregarFilaReceta(){
   recetaTemp.push({ insumoId: INVENTARIO.lista[0].id, cantidad: 1 });
   renderFilasReceta();
 }
+function onCambioGrupoSelect(){
+  const sel = document.getElementById('pm-grupo').value;
+  const inputNuevo = document.getElementById('pm-grupo-nuevo');
+  inputNuevo.classList.toggle('hidden', sel !== '__nuevo__');
+  if(sel === '__nuevo__') inputNuevo.focus();
+}
 async function guardarProductoModal(id){
   const nombre = document.getElementById('pm-nombre').value.trim();
   const cat = document.getElementById('pm-cat').value;
   const precio = toNum(document.getElementById('pm-precio').value);
-  const grupo = document.getElementById('pm-grupo').value.trim() || null;
+  let grupoSel = document.getElementById('pm-grupo').value;
+  if(grupoSel === '__nuevo__'){
+    grupoSel = document.getElementById('pm-grupo-nuevo').value.trim();
+    if(!grupoSel){ mostrarToast('Escribe el nombre del nuevo grupo'); return; }
+  }
+  const grupo = grupoSel || null;
   if(!nombre){ mostrarToast('Escribe un nombre para el producto'); return; }
   const receta = recetaTemp.filter(r=>r.insumoId && r.cantidad>0);
   try{
