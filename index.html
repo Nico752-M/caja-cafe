@@ -847,7 +847,7 @@ html,body{overflow-x:hidden; width:100%;}
   <!-- ================= INVENTARIO ================= -->
   <section class="view" id="view-inventario">
     <div class="eyebrow">Insumos</div>
-    <h2 class="titulo-vista">Inventario</h2>
+    <h2 class="titulo-vista">Inventario<span class="acciones"><button class="btn btn-outline btn-sm" onclick="abrirModalHistorialMermas()">Historial de bajas</button></span></h2>
     <div id="inventario-alerta"></div>
 
     <div class="card" style="margin-bottom:20px;">
@@ -1194,6 +1194,7 @@ let CAJA = { estado:{ abierta:false, apertura:0, fechaApertura:null }, ventas:[]
 let RESERVAS = { lista:[] };
 let PRODUCTOS = { lista:[] };
 let INVENTARIO = { lista:[] };
+let MERMAS = { lista:[] };
 
 let pedido = {}; // productoId -> {productoId, nombre, precio, cantidad}
 let descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
@@ -1352,9 +1353,9 @@ function textoPago(v){
 }
 async function cargarDatos(){
   try{
-    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows, movimientosRows] = await Promise.all([
+    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows, movimientosRows, mermasRows] = await Promise.all([
       oListAll('insumos'), oListAll('productos'), oListAll('receta_items'), oListAll('caja_estado'),
-      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas'), oListAll('turnos'), oListAll('movimientos_caja')
+      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas'), oListAll('turnos'), oListAll('movimientos_caja'), oListAll('mermas')
     ]);
 
     INVENTARIO = { lista: insumosRows.map(r=>({ id:r.id, nombre:r.nombre, unidad:r.unidad, stock:Number(r.stock), minimo:Number(r.minimo) })) };
@@ -1382,6 +1383,8 @@ async function cargarDatos(){
 
     CAJA.turnos = turnosRows.map(t=>({ id:t.id, fecha: fechaOracleAISO(t.fecha), cajero:t.cajero, horaInicio:t.hora_inicio, horaFin:t.hora_fin||null, tsInicio:Number(t.ts_inicio), tsFin: t.ts_fin!=null?Number(t.ts_fin):null }));
     CAJA.movimientos = movimientosRows.map(m=>({ id:m.id, fecha: fechaOracleAISO(m.fecha), tipo:m.tipo, monto:Number(m.monto), motivo:m.motivo, cajero:m.cajero||null, ts:Number(m.ts), cerrada: !!Number(m.cerrada) }));
+
+    MERMAS = { lista: mermasRows.map(m=>({ id:m.id, fecha:fechaOracleAISO(m.fecha), insumoId:m.insumo_id, nombre:m.nombre, unidad:m.unidad, cantidad:Number(m.cantidad), motivo:m.motivo, detalle:m.detalle||'', cajero:m.cajero||null, ts:Number(m.ts) })) };
 
     mostrarToast('Datos cargados desde Oracle ✓');
   }catch(e){
@@ -3385,7 +3388,7 @@ function renderInventario(){
         <input class="mini-input" type="number" id="ajuste-${i.id}" step="any" placeholder="cant. (ej: 0.5)">
         <button class="btn btn-outline btn-sm" onclick="ajustarStockInput('${i.id}')">+</button>
       </div></td>
-      <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
+      <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="abrirModalMerma('${i.id}')">Botar</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
     </tr>`;
   }).join('') : `<tr><td colspan="6" class="vacio">${buscarInv ? 'No se encontró ningún insumo con ese nombre' : 'Aún no hay insumos registrados'}</td></tr>`;
 }
@@ -3430,6 +3433,61 @@ async function ajustarStockInput(id){
     mostrarToast('Stock de ' + fresco.nombre + ' actualizado');
     renderInventario(); actualizarBadgeInventario(); renderCaja();
   }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
+}
+function abrirModalHistorialMermas(){
+  const lista = [...MERMAS.lista].sort((a,b)=>b.ts-a.ts).slice(0,100);
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Historial de bajas</h3>
+    ${lista.length ? lista.map(m=>`
+      <div class="fila-simple" style="align-items:flex-start;">
+        <span class="n"><b>${escaparTexto(m.nombre)}</b> · ${m.cantidad} ${escaparTexto(m.unidad)}<br>
+          <span style="color:var(--vino-suave); font-size:.76rem;">${escaparTexto(m.motivo)}${m.detalle ? ' — '+escaparTexto(m.detalle) : ''}</span><br>
+          <span style="color:var(--concreto); font-size:.7rem;">${fechaCorta(m.fecha)}${m.cajero ? ' · '+escaparTexto(m.cajero) : ''}</span>
+        </span>
+      </div>`).join('') : '<div class="vacio">Aún no hay bajas registradas</div>'}
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''">Cerrar</button>
+  </div></div>`;
+}
+const MOTIVOS_MERMA = ['Vencido','Dañado / mal estado','Se cayó o derramó','Error de preparación','Otro'];
+let mermaInsumoActual = null;
+function abrirModalMerma(id){
+  const i = INVENTARIO.lista.find(x=>x.id===id);
+  if(!i) return;
+  mermaInsumoActual = id;
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="overlay"><div class="modal-box">
+    <h3 style="margin-bottom:6px;">Registrar baja</h3>
+    <p style="margin-bottom:14px;">${escaparTexto(i.nombre)} · stock actual: ${i.stock} ${i.unidad}</p>
+    <div class="campo" style="text-align:left;"><label>Cantidad botada (${i.unidad})</label><input type="number" id="merma-cantidad" min="0" step="any" placeholder="Ej: 2"></div>
+    <div class="campo" style="text-align:left;"><label>Motivo</label><select id="merma-motivo">${MOTIVOS_MERMA.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div>
+    <div class="campo" style="text-align:left;"><label>Detalle (opcional)</label><textarea id="merma-detalle" placeholder="Ej: se dañó por falta de frío"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+      <button class="btn btn-vino" onclick="guardarMerma()">Registrar baja</button>
+    </div>
+  </div></div>`;
+}
+async function guardarMerma(){
+  const i = INVENTARIO.lista.find(x=>x.id===mermaInsumoActual);
+  if(!i) return;
+  const cantidad = parseFloat(document.getElementById('merma-cantidad').value);
+  const motivo = document.getElementById('merma-motivo').value;
+  const detalle = document.getElementById('merma-detalle').value.trim();
+  if(!cantidad || cantidad<=0){ mostrarToast('Ingresa la cantidad que se botó'); return; }
+  try{
+    const fresco = await oFetch(`insumos/${encodeURIComponent(i.id)}`);
+    if(cantidad > Number(fresco.stock)){ mostrarToast('Solo hay ' + fresco.stock + ' ' + fresco.unidad + ' en inventario'); return; }
+    const m = { id: uid('mm'), fecha: fechaOperativa(), insumoId:i.id, nombre:i.nombre, unidad:i.unidad, cantidad, motivo, detalle, cajero: nombreUsuarioActual(), ts: Date.now() };
+    await oInsert('mermas', { id:m.id, fecha:aOracleFecha(m.fecha), insumo_id:m.insumoId, nombre:m.nombre, unidad:m.unidad, cantidad:m.cantidad, motivo:m.motivo, detalle:m.detalle, cajero:m.cajero, ts:m.ts });
+    const nuevoStock = Number(fresco.stock) - cantidad;
+    await oUpdate('insumos', i.id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
+    i.stock = nuevoStock;
+    MERMAS.lista.push(m);
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Baja registrada: ' + cantidad + ' ' + i.unidad + ' de ' + i.nombre);
+    renderInventario(); actualizarBadgeInventario(); renderCaja();
+  }catch(e){ console.error(e); mostrarToast('No se pudo registrar la baja en Oracle'); }
 }
 function eliminarInsumo(id){
   confirmar('¿Eliminar este insumo? Las recetas que lo usan quedarán sin ese ingrediente.', async ()=>{
@@ -3729,7 +3787,7 @@ function descargarArchivo(nombre, contenido, tipo){
 }
 function csvEscape(v){ const s = String(v??''); return /[",\n;]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
 function exportarRespaldoCompleto(){
-  const data = { generado: new Date().toISOString(), caja: CAJA, reservas: RESERVAS, productos: PRODUCTOS, inventario: INVENTARIO };
+  const data = { generado: new Date().toISOString(), caja: CAJA, reservas: RESERVAS, productos: PRODUCTOS, inventario: INVENTARIO, mermas: MERMAS };
   descargarArchivo('cafe-real-respaldo-'+hoyISO()+'.json', JSON.stringify(data, null, 2), 'application/json');
 }
 function exportarVentasCSV(rango){
