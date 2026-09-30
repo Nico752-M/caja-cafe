@@ -2683,6 +2683,7 @@ async function dejarPendiente(){
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
     mostrarToast('Pedido dejado pendiente' + (venta.mesa ? ' · Mesa '+venta.mesa : ''));
+    if(esAdmin()) imprimirComanda(venta);
     vaciarPedido();
     renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){
@@ -2898,6 +2899,23 @@ function imprimirVenta(venta){
     <div class="ri-linea"></div>
     <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
+  `;
+  setTimeout(()=>window.print(), 80);
+}
+function imprimirComanda(venta){
+  const el = document.getElementById('recibo-imprimible');
+  const hora = new Date(venta.ts).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', hour12:false });
+  el.innerHTML = `
+    <h4>COMANDA</h4>
+    <div class="ri-linea"></div>
+    <div class="centrado" style="font-size:22px; font-weight:bold; margin:4px 0;">${venta.mesa ? 'MESA '+venta.mesa : 'PARA LLEVAR'}</div>
+    <div class="ri-linea"></div>
+    <div class="ri-fila"><span>HORA:</span><span>${hora}</span></div>
+    ${venta.cajero ? `<div class="ri-fila"><span>TOMÓ:</span><span>${venta.cajero}</span></div>` : ''}
+    ${venta.nota ? `<div class="ri-fila"><span>CLIENTE:</span><span>${venta.nota}</span></div>` : ''}
+    <div class="ri-linea"></div>
+    ${venta.items.map(i=>`<div class="ri-fila" style="font-size:16px; font-weight:bold; margin:5px 0;"><span>${i.cantidad} x ${i.nombre}</span></div>`).join('')}
+    <div class="ri-linea"></div>
   `;
   setTimeout(()=>window.print(), 80);
 }
