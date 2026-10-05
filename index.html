@@ -847,7 +847,7 @@ html,body{overflow-x:hidden; width:100%;}
   <!-- ================= INVENTARIO ================= -->
   <section class="view" id="view-inventario">
     <div class="eyebrow">Insumos</div>
-    <h2 class="titulo-vista">Inventario<span class="acciones"><button class="btn btn-outline btn-sm" onclick="abrirModalHistorialMermas()">Historial de bajas</button></span></h2>
+    <h2 class="titulo-vista">Inventario</h2>
     <div id="inventario-alerta"></div>
 
     <div class="card" style="margin-bottom:20px;">
@@ -1194,7 +1194,6 @@ let CAJA = { estado:{ abierta:false, apertura:0, fechaApertura:null }, ventas:[]
 let RESERVAS = { lista:[] };
 let PRODUCTOS = { lista:[] };
 let INVENTARIO = { lista:[] };
-let MERMAS = { lista:[] };
 
 let pedido = {}; // productoId -> {productoId, nombre, precio, cantidad}
 let descuentoActual = { tipo:'ninguno', valor:0, motivo:'' };
@@ -1353,9 +1352,9 @@ function textoPago(v){
 }
 async function cargarDatos(){
   try{
-    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows, movimientosRows, mermasRows] = await Promise.all([
+    const [insumosRows, productosRows, recetaRows, estadoRows, ventasRows, ventaItemsRows, cierresRows, cierreMetodosRows, reservasRows, turnosRows, movimientosRows] = await Promise.all([
       oListAll('insumos'), oListAll('productos'), oListAll('receta_items'), oListAll('caja_estado'),
-      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas'), oListAll('turnos'), oListAll('movimientos_caja'), oListAll('mermas')
+      oListAll('ventas'), oListAll('venta_items'), oListAll('cierres'), oListAll('cierre_metodos'), oListAll('reservas'), oListAll('turnos'), oListAll('movimientos_caja')
     ]);
 
     INVENTARIO = { lista: insumosRows.map(r=>({ id:r.id, nombre:r.nombre, unidad:r.unidad, stock:Number(r.stock), minimo:Number(r.minimo) })) };
@@ -1383,8 +1382,6 @@ async function cargarDatos(){
 
     CAJA.turnos = turnosRows.map(t=>({ id:t.id, fecha: fechaOracleAISO(t.fecha), cajero:t.cajero, horaInicio:t.hora_inicio, horaFin:t.hora_fin||null, tsInicio:Number(t.ts_inicio), tsFin: t.ts_fin!=null?Number(t.ts_fin):null }));
     CAJA.movimientos = movimientosRows.map(m=>({ id:m.id, fecha: fechaOracleAISO(m.fecha), tipo:m.tipo, monto:Number(m.monto), motivo:m.motivo, cajero:m.cajero||null, ts:Number(m.ts), cerrada: !!Number(m.cerrada) }));
-
-    MERMAS = { lista: mermasRows.map(m=>({ id:m.id, fecha:fechaOracleAISO(m.fecha), insumoId:m.insumo_id, nombre:m.nombre, unidad:m.unidad, cantidad:Number(m.cantidad), motivo:m.motivo, detalle:m.detalle||'', cajero:m.cajero||null, ts:Number(m.ts), estado:m.estado||'activa', motivoAnulacion:m.motivo_anulacion||null, anuladaTs:m.anulada_ts!=null?Number(m.anulada_ts):null, anuladaPor:m.anulada_por||null })) };
 
     mostrarToast('Datos cargados desde Oracle ✓');
   }catch(e){
@@ -1749,7 +1746,7 @@ async function confirmarCobroPendiente(){
   const fechaCobro=fechaOperativa(), horaCobro=ahoraStr(), tsCobro=Date.now();
   try{
     await oUpdate('ventas',v.id,{
-      id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
+      id:v.id, fecha:aOracleFecha(fechaCobro), hora:horaCobro, ts:tsCobro, subtotal:v.subtotal,
       descuento_tipo:v.descuento?v.descuento.tipo:null, descuento_valor:v.descuento?v.descuento.valor:null,
       descuento_motivo:v.descuento?v.descuento.motivo:null, descuento_monto:v.descuento?v.descuento.monto:0,
       servicio_porcentaje:v.servicioPorcentaje, servicio_monto:v.servicioMonto||0,
@@ -1758,6 +1755,7 @@ async function confirmarCobroPendiente(){
     });
     v.metodo=metodo; v.metodo2=metodo2; v.monto2=monto2; v.recibido=recibido; v.cambio=cambio; v.estado='pagada';
     v.fechaPago=fechaCobro; v.horaPago=horaCobro; v.tsPago=tsCobro;
+    v.fecha=fechaCobro; v.hora=horaCobro; v.ts=tsCobro;
     document.getElementById('modal-root').innerHTML='';
     mostrarToast('Cuenta cobrada · '+fmt(v.total));
     imprimirVenta(v); renderCaja(); renderResumen(); renderEstadisticas();
@@ -2107,7 +2105,7 @@ async function cerrarCaja(){
       await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
         descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
         descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-        total:v.total, metodo:v.metodo, metodo2:v.metodo2||null, monto2:v.monto2!=null?v.monto2:null, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada', servicio_porcentaje:v.servicioPorcentaje, servicio_monto:v.servicioMonto||0,
+        total:v.total, metodo:v.metodo, metodo2:v.metodo2||null, monto2:v.monto2!=null?v.monto2:null, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada',
         fecha_pago: aOracleFecha(v.fechaPago), hora_pago: v.horaPago, ts_pago: v.tsPago });
       v.cerrada = true;
     }
@@ -2686,7 +2684,6 @@ async function dejarPendiente(){
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
     mostrarToast('Pedido dejado pendiente' + (venta.mesa ? ' · Mesa '+venta.mesa : ''));
-    if(esAdmin()) imprimirComanda(venta);
     vaciarPedido();
     renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){
@@ -2902,23 +2899,6 @@ function imprimirVenta(venta){
     <div class="ri-linea"></div>
     <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
-  `;
-  setTimeout(()=>window.print(), 80);
-}
-function imprimirComanda(venta){
-  const el = document.getElementById('recibo-imprimible');
-  const hora = new Date(venta.ts).toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit', hour12:false });
-  el.innerHTML = `
-    <h4>COMANDA</h4>
-    <div class="ri-linea"></div>
-    <div class="centrado" style="font-size:22px; font-weight:bold; margin:4px 0;">${venta.mesa ? 'MESA '+venta.mesa : 'PARA LLEVAR'}</div>
-    <div class="ri-linea"></div>
-    <div class="ri-fila"><span>HORA:</span><span>${hora}</span></div>
-    ${venta.cajero ? `<div class="ri-fila"><span>TOMÓ:</span><span>${venta.cajero}</span></div>` : ''}
-    ${venta.nota ? `<div class="ri-fila"><span>CLIENTE:</span><span>${venta.nota}</span></div>` : ''}
-    <div class="ri-linea"></div>
-    ${venta.items.map(i=>`<div class="ri-fila" style="font-size:16px; font-weight:bold; margin:5px 0;"><span>${i.cantidad} x ${i.nombre}</span></div>`).join('')}
-    <div class="ri-linea"></div>
   `;
   setTimeout(()=>window.print(), 80);
 }
@@ -3388,7 +3368,7 @@ function renderInventario(){
         <input class="mini-input" type="number" id="ajuste-${i.id}" step="any" placeholder="cant. (ej: 0.5)">
         <button class="btn btn-outline btn-sm" onclick="ajustarStockInput('${i.id}')">+</button>
       </div></td>
-      <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="abrirModalMerma('${i.id}')">Baja</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
+      <td><button class="link-btn" onclick="abrirModalInsumo('${i.id}')">Editar</button> <button class="link-btn danger" onclick="eliminarInsumo('${i.id}')">Eliminar</button></td>
     </tr>`;
   }).join('') : `<tr><td colspan="6" class="vacio">${buscarInv ? 'No se encontró ningún insumo con ese nombre' : 'Aún no hay insumos registrados'}</td></tr>`;
 }
@@ -3433,109 +3413,6 @@ async function ajustarStockInput(id){
     mostrarToast('Stock de ' + fresco.nombre + ' actualizado');
     renderInventario(); actualizarBadgeInventario(); renderCaja();
   }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
-}
-function abrirModalHistorialMermas(){
-  const lista = [...MERMAS.lista].sort((a,b)=>b.ts-a.ts).slice(0,100);
-  const root = document.getElementById('modal-root');
-  root.innerHTML = `<div class="overlay"><div class="modal-box ancho">
-    <h3>Historial de bajas</h3>
-    ${lista.length ? lista.map(m=>`
-      <div class="fila-simple" style="align-items:flex-start;">
-        <span class="n"><b>${escaparTexto(m.nombre)}</b> · ${m.cantidad} ${escaparTexto(m.unidad)}<br>
-          <span style="color:var(--vino-suave); font-size:.76rem;">${escaparTexto(m.motivo)}${m.detalle ? ' — '+escaparTexto(m.detalle) : ''}</span><br>
-          <span style="color:var(--concreto); font-size:.7rem;">${fechaCorta(m.fecha)}${m.cajero ? ' · '+escaparTexto(m.cajero) : ''}</span>
-          ${m.estado==='anulada'
-            ? `<br><span style="color:var(--vino-suave); font-size:.72rem; font-weight:600;">ANULADA${m.anuladaPor ? ' por '+escaparTexto(m.anuladaPor) : ''}: ${escaparTexto(m.motivoAnulacion||'')}</span>`
-            : `<br><button class="link-btn danger" onclick="anularMerma('${m.id}')">Anular baja</button>`}
-        </span>
-      </div>`).join('') : '<div class="vacio">Aún no hay bajas registradas</div>'}
-    <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''">Cerrar</button>
-  </div></div>`;
-}
-function imprimirMerma(m){
-  const el = document.getElementById('recibo-imprimible');
-  const fechaHora = new Date(m.ts).toLocaleString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', hour12:false });
-  el.innerHTML = `
-    <h4>CAFÉ REAL</h4>
-    <div class="centrado" style="font-weight:bold; font-size:13px;">BAJA DE INVENTARIO</div>
-    <div class="centrado">Comprobante interno</div>
-    <div class="ri-linea"></div>
-    <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
-    ${m.cajero ? `<div class="ri-fila"><span>REGISTRÓ:</span><span>${escaparTexto(m.cajero)}</span></div>` : ''}
-    <div class="ri-linea"></div>
-    <div class="ri-fila" style="font-size:14px; font-weight:bold;"><span>${escaparTexto(m.nombre)}</span></div>
-    <div class="ri-fila" style="font-size:14px; font-weight:bold;"><span>CANTIDAD:</span><span>${m.cantidad} ${escaparTexto(m.unidad)}</span></div>
-    <div class="ri-fila"><span>MOTIVO:</span><span>${escaparTexto(m.motivo)}</span></div>
-    ${m.detalle ? `<div class="ri-fila"><span>DETALLE:</span><span>${escaparTexto(m.detalle)}</span></div>` : ''}
-    <div class="ri-linea"></div>
-    <div style="margin-top:22px; border-top:1px solid #000; text-align:center; font-size:10px; padding-top:2px;">Firma</div>
-  `;
-  setTimeout(()=>window.print(), 80);
-}
-async function anularMerma(id){
-  const m = MERMAS.lista.find(x=>x.id===id);
-  if(!m || m.estado==='anulada') return;
-  const motivo = prompt('Motivo para anular esta baja (ej: me equivoqué, fue una prueba):', '');
-  if(motivo===null) return;
-  if(!motivo.trim()){ mostrarToast('Escribe el motivo de la anulación'); return; }
-  try{
-    const ts = Date.now(), por = nombreUsuarioActual();
-    await oUpdate('mermas', m.id, { id:m.id, fecha:aOracleFecha(m.fecha), insumo_id:m.insumoId, nombre:m.nombre, unidad:m.unidad, cantidad:m.cantidad, motivo:m.motivo, detalle:m.detalle, cajero:m.cajero, ts:m.ts, estado:'anulada', motivo_anulacion:motivo.trim(), anulada_ts:ts, anulada_por:por });
-    m.estado = 'anulada'; m.motivoAnulacion = motivo.trim(); m.anuladaTs = ts; m.anuladaPor = por;
-    let fresco = null;
-    try{ fresco = await oFetch(`insumos/${encodeURIComponent(m.insumoId)}`); }catch(e){ fresco = null; }
-    if(fresco){
-      const nuevoStock = Math.round((Number(fresco.stock) + m.cantidad) * 1000000) / 1000000;
-      await oUpdate('insumos', m.insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
-      const local = INVENTARIO.lista.find(i=>i.id===m.insumoId);
-      if(local) local.stock = nuevoStock;
-      mostrarToast('Baja anulada · stock devuelto al inventario');
-    }else{
-      mostrarToast('Baja anulada, pero ese insumo ya no existe, no se pudo devolver el stock');
-    }
-    abrirModalHistorialMermas(); renderInventario(); actualizarBadgeInventario(); renderCaja();
-  }catch(e){ console.error(e); mostrarToast('No se pudo anular la baja en Oracle'); }
-}
-const MOTIVOS_MERMA = ['Vencido','Dañado / mal estado','Se cayó o derramó','Error de preparación','Otro'];
-let mermaInsumoActual = null;
-function abrirModalMerma(id){
-  const i = INVENTARIO.lista.find(x=>x.id===id);
-  if(!i) return;
-  mermaInsumoActual = id;
-  const root = document.getElementById('modal-root');
-  root.innerHTML = `<div class="overlay"><div class="modal-box">
-    <h3 style="margin-bottom:6px;">Registrar baja</h3>
-    <p style="margin-bottom:14px;">${escaparTexto(i.nombre)} · stock actual: ${i.stock} ${i.unidad}</p>
-    <div class="campo" style="text-align:left;"><label>Cantidad dada de baja (${i.unidad})</label><input type="number" id="merma-cantidad" min="0" step="any" placeholder="Ej: 2"></div>
-    <div class="campo" style="text-align:left;"><label>Motivo</label><select id="merma-motivo">${MOTIVOS_MERMA.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div>
-    <div class="campo" style="text-align:left;"><label>Detalle (opcional)</label><textarea id="merma-detalle" placeholder="Ej: se dañó por falta de frío"></textarea></div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
-      <button class="btn btn-vino" onclick="guardarMerma()">Registrar baja</button>
-    </div>
-  </div></div>`;
-}
-async function guardarMerma(){
-  const i = INVENTARIO.lista.find(x=>x.id===mermaInsumoActual);
-  if(!i) return;
-  const cantidad = parseFloat(document.getElementById('merma-cantidad').value);
-  const motivo = document.getElementById('merma-motivo').value;
-  const detalle = document.getElementById('merma-detalle').value.trim();
-  if(!cantidad || cantidad<=0){ mostrarToast('Ingresa la cantidad que se da de baja'); return; }
-  try{
-    const fresco = await oFetch(`insumos/${encodeURIComponent(i.id)}`);
-    if(cantidad > Number(fresco.stock)){ mostrarToast('Solo hay ' + fresco.stock + ' ' + fresco.unidad + ' en inventario'); return; }
-    const m = { id: uid('mm'), fecha: fechaOperativa(), insumoId:i.id, nombre:i.nombre, unidad:i.unidad, cantidad, motivo, detalle, cajero: nombreUsuarioActual(), ts: Date.now(), estado:'activa' };
-    await oInsert('mermas', { id:m.id, fecha:aOracleFecha(m.fecha), insumo_id:m.insumoId, nombre:m.nombre, unidad:m.unidad, cantidad:m.cantidad, motivo:m.motivo, detalle:m.detalle, cajero:m.cajero, ts:m.ts });
-    const nuevoStock = Number(fresco.stock) - cantidad;
-    await oUpdate('insumos', i.id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
-    i.stock = nuevoStock;
-    MERMAS.lista.push(m);
-    document.getElementById('modal-root').innerHTML = '';
-    mostrarToast('Baja registrada: ' + cantidad + ' ' + i.unidad + ' de ' + i.nombre);
-    imprimirMerma(m);
-    renderInventario(); actualizarBadgeInventario(); renderCaja();
-  }catch(e){ console.error(e); mostrarToast('No se pudo registrar la baja en Oracle'); }
 }
 function eliminarInsumo(id){
   confirmar('¿Eliminar este insumo? Las recetas que lo usan quedarán sin ese ingrediente.', async ()=>{
@@ -3835,7 +3712,7 @@ function descargarArchivo(nombre, contenido, tipo){
 }
 function csvEscape(v){ const s = String(v??''); return /[",\n;]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
 function exportarRespaldoCompleto(){
-  const data = { generado: new Date().toISOString(), caja: CAJA, reservas: RESERVAS, productos: PRODUCTOS, inventario: INVENTARIO, mermas: MERMAS };
+  const data = { generado: new Date().toISOString(), caja: CAJA, reservas: RESERVAS, productos: PRODUCTOS, inventario: INVENTARIO };
   descargarArchivo('cafe-real-respaldo-'+hoyISO()+'.json', JSON.stringify(data, null, 2), 'application/json');
 }
 function exportarVentasCSV(rango){
