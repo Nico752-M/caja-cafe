@@ -2110,9 +2110,8 @@ async function cerrarCaja(){
         fecha_pago: aOracleFecha(v.fechaPago), hora_pago: v.horaPago, ts_pago: v.tsPago });
       v.cerrada = true;
     }
-    const nuevoCierre = { id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
-      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosPend, totalEgresos: egresosPend, esperado, contado, diferencia: contado-esperado };
-    CAJA.cierres.push(nuevoCierre);
+    CAJA.cierres.push({ id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
+      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosPend, totalEgresos: egresosPend, esperado, contado, diferencia: contado-esperado });
       for(const m of movimientosHoy()){
       await oUpdate('movimientos_caja', m.id, { id:m.id, fecha:aOracleFecha(m.fecha), tipo:m.tipo, monto:m.monto, motivo:m.motivo, cajero:m.cajero, ts:m.ts, cerrada:1 });
       m.cerrada = true;
