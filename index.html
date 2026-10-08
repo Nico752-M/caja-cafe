@@ -1886,6 +1886,7 @@ async function ajustarInventarioPorEdicion(itemsOriginales, itemsNuevos){
     if(!necesita[insumoId]) continue;
     const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
     if(!fresco) continue;
+    if(necesita[insumoId] < 0 && Number(fresco.stock) <= 0) continue; // quitaron productos y el insumo está agotado: no se devuelve
     const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
@@ -2208,7 +2209,7 @@ function buildItemGrid(){
   let html = '';
   Object.keys(grupos).forEach(g=>{
     const opciones = grupos[g];
-    const sinStock = opciones.every(o=>stockDisponibleParaProducto(o) <= 0);
+    const sinStock = false;
     const precios = [...new Set(opciones.map(o=>o.precio))];
     const precioTxt = precios.length===1 ? fmt(precios[0]) : `Desde ${fmt(Math.min(...precios))}`;
     const totalEnPedido = opciones.reduce((a,o)=>a+(pedido[o.id]?pedido[o.id].cantidad:0),0);
@@ -2227,8 +2228,7 @@ function buildItemGrid(){
 }
 function tileProducto(it){
   const qty = pedido[it.id] ? pedido[it.id].cantidad : 0;
-  const disponible = stockDisponibleParaProducto(it);
-  const sinStock = disponible <= 0;
+  const sinStock = false;
   return `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="agregarItem('${it.id}')" ${sinStock?'disabled':''}>
       ${qty>0 ? `<div class="badge-qty">${qty}</div>` : ''}
       ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
@@ -2244,7 +2244,7 @@ function abrirModalGrupo(grupo){
     <h3 style="margin-bottom:16px;">${grupo}</h3>
     <div>
       ${opciones.map(o=>{
-        const sinStock = stockDisponibleParaProducto(o) <= 0;
+        const sinStock = false;
         return `<button class="btn btn-outline btn-block" style="margin-bottom:8px; display:flex; justify-content:space-between; ${sinStock?'opacity:.4; pointer-events:none;':''}" onclick="elegirDeGrupo('${o.id}')">
           <span>${o.nombre}</span><span class="mono">${fmt(o.precio)}${sinStock?' · Sin stock':''}</span>
         </button>`;
@@ -2260,7 +2260,6 @@ function elegirDeGrupo(id){
 function agregarItem(id){
   const it = PRODUCTOS.lista.find(p=>p.id===id);
   if(!it) return;
-  if(stockDisponibleParaProducto(it) <= (pedido[id]?pedido[id].cantidad:0)){ mostrarToast('No hay suficiente inventario para agregar otro'); return; }
   if(!pedido[id]) pedido[id] = { productoId:id, nombre: it.nombre, precio: it.precio, cantidad:0 };
   pedido[id].cantidad++;
   buildItemGrid(); renderPedido();
@@ -2800,6 +2799,7 @@ async function restaurarInventarioPorAnulacion(itemsVenta){
     if(!necesita[insumoId]) continue;
     const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
     if(!fresco) continue;
+    if(Number(fresco.stock) <= 0) continue; // agotado: no se inventa stock
     const nuevoStock = Number(fresco.stock) + necesita[insumoId];
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
