@@ -1293,7 +1293,47 @@ async function oListAll(tabla){
 }
 async function oInsert(tabla, fila){ return oFetch(`${tabla}/`, { method:'POST', body: fila }); }
 async function oUpdate(tabla, id, fila){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'PUT', body: fila }); }
+/* descuento + propina sobre un subtotal */
+function totalesVenta(subtotal, desc, servPct){
+  let montoDesc = 0;
+  if(desc){
+    if(desc.tipo==='cortesia') montoDesc = subtotal;
+    else if(desc.tipo==='porcentaje') montoDesc = Math.min(subtotal, subtotal*desc.valor/100);
+    else if(desc.tipo==='valor') montoDesc = Math.min(subtotal, desc.valor);
+  }
+  const base = Math.max(0, subtotal - montoDesc);
+  const montoServ = servPct>0 ? Math.round(base*servPct/100) : 0;
+  return { montoDesc, montoServ, total: base + montoServ };
+}
 async function oDelete(tabla, id){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'DELETE' }); }
+
+/* arma la fila COMPLETA de una venta para el PUT (ORDS reemplaza toda la fila,
+   así que todo campo omitido queda en NULL) */
+function filaVentaOracle(v, extra){
+  return Object.assign({
+    id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
+    descuento_tipo:v.descuento?v.descuento.tipo:null, descuento_valor:v.descuento?v.descuento.valor:null,
+    descuento_motivo:v.descuento?v.descuento.motivo:null, descuento_monto:v.descuento?v.descuento.monto:0,
+    servicio_porcentaje:v.servicioPorcentaje!=null?v.servicioPorcentaje:null, servicio_monto:v.servicioMonto||0,
+    total:v.total, metodo:v.metodo||null, metodo2:v.metodo2||null, monto2:v.monto2!=null?v.monto2:null,
+    recibido:v.recibido!=null?v.recibido:null, cambio:v.cambio!=null?v.cambio:null,
+    nota:v.nota, cajero:v.cajero, cerrada:v.cerrada?1:0, mesa:v.mesa, estado:v.estado,
+    motivo_anulacion:v.motivoAnulacion||null, anulada_ts:v.anuladaTs||null, anulada_por:v.anuladaPor||null,
+    fecha_pago:v.fechaPago?aOracleFecha(v.fechaPago):null, hora_pago:v.horaPago||null, ts_pago:v.tsPago||null
+  }, extra||{});
+}
+/* descuento + propina sobre un subtotal */
+function totalesVenta(subtotal, desc, servPct){
+  let montoDesc = 0;
+  if(desc){
+    if(desc.tipo==='cortesia') montoDesc = subtotal;
+    else if(desc.tipo==='porcentaje') montoDesc = Math.min(subtotal, subtotal*desc.valor/100);
+    else if(desc.tipo==='valor') montoDesc = Math.min(subtotal, desc.valor);
+  }
+  const base = Math.max(0, subtotal - montoDesc);
+  const montoServ = servPct>0 ? Math.round(base*servPct/100) : 0;
+  return { montoDesc, montoServ, total: base + montoServ };
+}
 async function itemsDeVenta(ventaId){
   const q = encodeURIComponent(JSON.stringify({ venta_id: ventaId }));
   const data = await oFetch(`venta_items/?q=${q}&limit=200`);
@@ -1913,13 +1953,13 @@ async function guardarDetallePendiente(){
   const nuevoTotal = baseConDesc + montoServ;
   const desc = detalleEditTemp.descuento;
   const descAGuardar = (desc && desc.tipo!=='ninguno' && montoDesc>0) ? { ...desc, monto: montoDesc } : null;
-  const serv = detalleEditTemp.servicio;
+  const serv = detalleEditTemp.servicio; const insertadosNuevos = [];
   try{
-    await ajustarInventarioPorEdicion(v.items, nuevosItems);
+    /* el inventario se ajusta al final, después de guardar */
     const filasExistentes = await itemsDeVenta(v.id);
-    for(const fila of filasExistentes){ await oDelete('venta_items', fila.id); }
+    /* los productos viejos se borran al final, después de guardar los nuevos */
     for(const it of nuevosItems){
-      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado||null });
+      const vidNuevo = uid('vi'); insertadosNuevos.push(vidNuevo); await oInsert('venta_items', { id:vidNuevo, venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado||null });
     }
     await oUpdate('ventas', v.id, {
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal,
@@ -1929,12 +1969,12 @@ async function guardarDetallePendiente(){
       total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente',
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
-    v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
+    insertadosNuevos.length = 0; for(const fila of filasExistentes){ await oDelete('venta_items', fila.id); } await ajustarInventarioPorEdicion(v.items, nuevosItems); v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
     v.servicioPorcentaje = montoServ>0 ? serv.porcentaje : null; v.servicioMonto = montoServ;
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Pedido actualizado');
     renderCaja(); renderEstadisticas();
-  }catch(e){ console.error(e); mostrarToast('No se pudo actualizar el pedido en Oracle'); }
+  }catch(e){ console.error(e); for(const vid of insertadosNuevos){ try{ await oDelete('venta_items', vid); }catch(_){} } mostrarToast('No se pudo actualizar el pedido en Oracle'); }
 }
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
@@ -2109,11 +2149,7 @@ async function cerrarCaja(){
       await oInsert('cierre_metodos', { id:uid('cm'), cierre_id:cierreId, metodo:m, total: porMetodo[m] });
     }
     for(const v of ventasPend){
-      await oUpdate('ventas', v.id, { id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:v.subtotal,
-        descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
-        descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-        total:v.total, metodo:v.metodo, metodo2:v.metodo2||null, monto2:v.monto2!=null?v.monto2:null, recibido:v.recibido, cambio:v.cambio, nota:v.nota, cajero:v.cajero, cerrada:1, mesa:v.mesa, estado:'pagada',
-        fecha_pago: aOracleFecha(v.fechaPago), hora_pago: v.horaPago, ts_pago: v.tsPago });
+      await oUpdate('ventas', v.id, filaVentaOracle(v, { cerrada:1 }));
       v.cerrada = true;
     }
     const nuevoCierre = { id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
@@ -2630,7 +2666,7 @@ async function confirmarAgregarAPendiente(){
   const nuevosItems = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad, tsAgregado: tsAhora }));
   const montoNuevo = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
   const nuevoSubtotal = v.subtotal + montoNuevo;
-  const nuevoTotal = v.total + montoNuevo;
+  const t = totalesVenta(nuevoSubtotal, v.descuento, v.servicioPorcentaje); const nuevoTotal = t.total; const descNuevo = v.descuento ? { ...v.descuento, monto: t.montoDesc } : null;
   document.getElementById('btn-agregar-a-pendiente').disabled = true;
   try{
     for(const it of nuevosItems){
@@ -2640,12 +2676,12 @@ async function confirmarAgregarAPendiente(){
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoSubtotal,
       descuento_tipo: v.descuento?v.descuento.tipo:null, descuento_valor: v.descuento?v.descuento.valor:null,
       descuento_motivo: v.descuento?v.descuento.motivo:null, descuento_monto: v.descuento?v.descuento.monto:0,
-      total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente',
+      total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente', servicio_porcentaje:v.servicioPorcentaje!=null?v.servicioPorcentaje:null, servicio_monto:t.montoServ, descuento_monto: descNuevo?descNuevo.monto:0,
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
     await descontarInventarioEnOracle(nuevosItems);
     v.items = v.items.concat(nuevosItems);
-    v.subtotal = nuevoSubtotal; v.total = nuevoTotal;
+    v.subtotal = nuevoSubtotal; v.total = nuevoTotal; v.descuento = descNuevo; v.servicioMonto = t.montoServ;
     mostrarToast('Productos agregados a la cuenta' + (v.mesa ? ' · Mesa '+v.mesa : ''));
     vaciarPedido();
     renderCaja(); renderEstadisticas();
