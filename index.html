@@ -1330,7 +1330,7 @@ function mapearVentas(ventasRows, ventaItemsRows){
     estado: v.estado || 'pagada',
     motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
     servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
-    items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad) })),
+    items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad), tsAgregado: it.ts_agregado!=null ? Number(it.ts_agregado) : null })),
     fechaPago: v.fecha_pago ? fechaOracleAISO(v.fecha_pago) : null,
     horaPago: v.hora_pago || null,
     tsPago: v.ts_pago!=null ? Number(v.ts_pago) : null,
@@ -1544,6 +1544,13 @@ function resumenItems(items){
   return total>1 ? `${primero} +${total-1}` : primero;
 }
 function fechaCorta(iso){ const d = new Date(iso+'T00:00:00'); return d.toLocaleDateString('es-CO',{day:'numeric', month:'short'}); }
+/* fecha y hora en que se agregó un producto a una cuenta; si no hay dato, cae a la apertura de la cuenta */
+function textoFechaAgregado(it, v){
+  if(it && it.tsAgregado){
+    return '📅 ' + new Date(it.tsAgregado).toLocaleString('es-CO',{day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+  }
+  return v && v.fecha ? '📅 Apertura de cuenta · ' + fechaCorta(v.fecha) : '';
+}
 
 /* recordatorios internos de reservas: avisa cuando falta ~3h, ~1 día o ~2 días */
 function msHastaReserva(r){
@@ -1834,7 +1841,7 @@ function renderModalDetallePendiente(){
     <div style="margin-bottom:14px;">
     ${detalleEditTemp.items.length ? detalleEditTemp.items.map((i,idx)=>`
       <div class="recibo-item">
-        <div class="ri-nom">${i.nombre}<small>${fmt(i.precio)} c/u</small></div>
+        <div class="ri-nom">${i.nombre}<small>${fmt(i.precio)} c/u</small><small>${textoFechaAgregado(i, v)}</small></div>
         <div class="qty-ctrl"><button onclick="cambiarCantidadDetalle(${idx},-1)">–</button><span class="n">${i.cantidad}</span><button onclick="cambiarCantidadDetalle(${idx},1)">+</button></div>
         <div class="ri-precio">${fmt(i.precio*i.cantidad)}</div>
       </div>`).join('') : '<div class="vacio">Sin productos</div>'}
@@ -1886,7 +1893,6 @@ async function ajustarInventarioPorEdicion(itemsOriginales, itemsNuevos){
     if(!necesita[insumoId]) continue;
     const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
     if(!fresco) continue;
-    if(necesita[insumoId] < 0 && Number(fresco.stock) <= 0) continue; // quitaron productos y el insumo está agotado: no se devuelve
     const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
@@ -1913,7 +1919,7 @@ async function guardarDetallePendiente(){
     const filasExistentes = await itemsDeVenta(v.id);
     for(const fila of filasExistentes){ await oDelete('venta_items', fila.id); }
     for(const it of nuevosItems){
-      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado||null });
     }
     await oUpdate('ventas', v.id, {
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal,
@@ -2110,8 +2116,9 @@ async function cerrarCaja(){
         fecha_pago: aOracleFecha(v.fechaPago), hora_pago: v.horaPago, ts_pago: v.tsPago });
       v.cerrada = true;
     }
-    CAJA.cierres.push({ id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
-      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosPend, totalEgresos: egresosPend, esperado, contado, diferencia: contado-esperado });
+    const nuevoCierre = { id:cierreId, fecha:hoy, fechaApertura: CAJA.estado.fechaApertura, horaCierre: ahoraStr(), cajero:CAJA.estado.cajero, apertura:CAJA.estado.apertura, porMetodo,
+      totalVentas: Object.values(porMetodo).reduce((a,b)=>a+b,0), totalIngresos: ingresosPend, totalEgresos: egresosPend, esperado, contado, diferencia: contado-esperado };
+    CAJA.cierres.push(nuevoCierre);
       for(const m of movimientosHoy()){
       await oUpdate('movimientos_caja', m.id, { id:m.id, fecha:aOracleFecha(m.fecha), tipo:m.tipo, monto:m.monto, motivo:m.motivo, cajero:m.cajero, ts:m.ts, cerrada:1 });
       m.cerrada = true;
@@ -2208,7 +2215,7 @@ function buildItemGrid(){
   let html = '';
   Object.keys(grupos).forEach(g=>{
     const opciones = grupos[g];
-    const sinStock = false;
+    const sinStock = opciones.every(o=>stockDisponibleParaProducto(o) <= 0);
     const precios = [...new Set(opciones.map(o=>o.precio))];
     const precioTxt = precios.length===1 ? fmt(precios[0]) : `Desde ${fmt(Math.min(...precios))}`;
     const totalEnPedido = opciones.reduce((a,o)=>a+(pedido[o.id]?pedido[o.id].cantidad:0),0);
@@ -2227,7 +2234,8 @@ function buildItemGrid(){
 }
 function tileProducto(it){
   const qty = pedido[it.id] ? pedido[it.id].cantidad : 0;
-  const sinStock = false;
+  const disponible = stockDisponibleParaProducto(it);
+  const sinStock = disponible <= 0;
   return `<button class="item-tile ${sinStock?'sin-stock':''}" onclick="agregarItem('${it.id}')" ${sinStock?'disabled':''}>
       ${qty>0 ? `<div class="badge-qty">${qty}</div>` : ''}
       ${sinStock ? `<div class="sin-stock-flag">Sin stock</div>` : ''}
@@ -2243,7 +2251,7 @@ function abrirModalGrupo(grupo){
     <h3 style="margin-bottom:16px;">${grupo}</h3>
     <div>
       ${opciones.map(o=>{
-        const sinStock = false;
+        const sinStock = stockDisponibleParaProducto(o) <= 0;
         return `<button class="btn btn-outline btn-block" style="margin-bottom:8px; display:flex; justify-content:space-between; ${sinStock?'opacity:.4; pointer-events:none;':''}" onclick="elegirDeGrupo('${o.id}')">
           <span>${o.nombre}</span><span class="mono">${fmt(o.precio)}${sinStock?' · Sin stock':''}</span>
         </button>`;
@@ -2259,6 +2267,7 @@ function elegirDeGrupo(id){
 function agregarItem(id){
   const it = PRODUCTOS.lista.find(p=>p.id===id);
   if(!it) return;
+  if(stockDisponibleParaProducto(it) <= (pedido[id]?pedido[id].cantidad:0)){ mostrarToast('No hay suficiente inventario para agregar otro'); return; }
   if(!pedido[id]) pedido[id] = { productoId:id, nombre: it.nombre, precio: it.precio, cantidad:0 };
   pedido[id].cantidad++;
   buildItemGrid(); renderPedido();
@@ -2456,7 +2465,7 @@ function abrirModalDividir(id){
   divisionState = {
     ventaId: id, modo: 'igual', nPersonas: 2, cuentas: [1,2], cuentaActiva: 1,
     nombresPartes: ['',''], nombresCuentas: {1:'',2:''},
-    itemsFlat: v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, unidades: Array(it.cantidad).fill(1) }))
+    itemsFlat: v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, tsAgregado: it.tsAgregado||null, unidades: Array(it.cantidad).fill(1) }))
   };
   renderModalDividir();
 }
@@ -2557,9 +2566,9 @@ async function confirmarDivision(){
   const nuevasVentas = [];
   if(divisionState.modo === 'igual'){
     const n = divisionState.nPersonas;
-    const itemsPorParte = v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, partes: repartirParejo(it.cantidad, n) }));
+    const itemsPorParte = v.items.map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, tsAgregado: it.tsAgregado||null, partes: repartirParejo(it.cantidad, n) }));
     for(let p=0; p<n; p++){
-      const itemsParte = itemsPorParte.filter(it=>it.partes[p]>0).map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: it.partes[p] }));
+      const itemsParte = itemsPorParte.filter(it=>it.partes[p]>0).map(it=>({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, tsAgregado: it.tsAgregado, cantidad: it.partes[p] }));
       if(!itemsParte.length) continue;
       const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
       const nombreParte = (divisionState.nombresPartes[p]||'').trim();
@@ -2571,7 +2580,7 @@ async function confirmarDivision(){
       const itemsParte = [];
       divisionState.itemsFlat.forEach(it=>{
         const cant = it.unidades.filter(a=>a===id).length;
-        if(cant>0) itemsParte.push({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, cantidad: cant });
+        if(cant>0) itemsParte.push({ productoId: it.productoId, nombre: it.nombre, precio: it.precio, tsAgregado: it.tsAgregado, cantidad: cant });
       });
       if(!itemsParte.length) continue;
       const subtotal = itemsParte.reduce((a,i)=>a+i.precio*i.cantidad,0);
@@ -2589,7 +2598,7 @@ async function confirmarDivision(){
         total:nv.total, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:nv.nota, cajero:nv.cajero, cerrada:0, mesa:nv.mesa, estado:'pendiente'
       });
       for(const it of nv.items){
-        await oInsert('venta_items', { id:uid('vi'), venta_id:nv.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+        await oInsert('venta_items', { id:uid('vi'), venta_id:nv.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado||null });
       }
     }
     await oDelete('ventas', v.id);
@@ -2617,14 +2626,15 @@ async function confirmarAgregarAPendiente(){
   const v = CAJA.ventas.find(x=>x.id===id);
   const keys = Object.keys(pedido);
   if(!v || !keys.length) return;
-  const nuevosItems = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
+  const tsAhora = Date.now();
+  const nuevosItems = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad, tsAgregado: tsAhora }));
   const montoNuevo = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
   const nuevoSubtotal = v.subtotal + montoNuevo;
   const nuevoTotal = v.total + montoNuevo;
   document.getElementById('btn-agregar-a-pendiente').disabled = true;
   try{
     for(const it of nuevosItems){
-      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+      await oInsert('venta_items', { id:uid('vi'), venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado });
     }
     await oUpdate('ventas', v.id, {
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal:nuevoSubtotal,
@@ -2654,7 +2664,8 @@ async function dejarPendiente(){
   const baseConDesc = Math.max(0, subtotal - montoDesc);
   const montoServ = calcularMontoServicio(baseConDesc);
   const total = baseConDesc + montoServ;
-  const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad }));
+  const tsAhora = Date.now();
+  const items = keys.map(k=>({ productoId: pedido[k].productoId, nombre: pedido[k].nombre, precio: pedido[k].precio, cantidad: pedido[k].cantidad, tsAgregado: tsAhora }));
   const mesaVal = document.getElementById('input-mesa').value;
   const venta = {
     id: uid('v'), ts: Date.now(), fecha: fechaOperativa(), hora: ahoraStr(), items, subtotal, total,
@@ -2677,7 +2688,7 @@ async function dejarPendiente(){
       fecha_pago:null, hora_pago:null, ts_pago:null
     });
     for(const it of items){
-      await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad });
+      await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado });
     }
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
@@ -2714,7 +2725,8 @@ async function cobrar(){
     if(recibido<total){ mostrarToast('El efectivo recibido no puede ser menor al total'); return; }
     cambio=recibido-total;
   }
-  const items=keys.map(k=>({productoId:pedido[k].productoId,nombre:pedido[k].nombre,precio:pedido[k].precio,cantidad:pedido[k].cantidad}));
+  const tsAhora=Date.now();
+  const items=keys.map(k=>({productoId:pedido[k].productoId,nombre:pedido[k].nombre,precio:pedido[k].precio,cantidad:pedido[k].cantidad,tsAgregado:tsAhora}));
   const mesaVal=document.getElementById('input-mesa').value;
   const venta={id:uid('v'),ts:Date.now(),fecha:fechaOperativa(),hora:ahoraStr(),items,subtotal,total,
     descuento:montoDesc>0?{...descuentoActual,monto:montoDesc}:null, servicioPorcentaje:montoServ>0?servicioActual.porcentaje:null, servicioMonto:montoServ,
@@ -2730,7 +2742,7 @@ async function cobrar(){
       total:venta.total,metodo:venta.metodo,metodo2:venta.metodo2,monto2:venta.monto2,recibido:venta.recibido,cambio:venta.cambio,nota:venta.nota,cajero:venta.cajero,cerrada:0,mesa:venta.mesa,estado:'pagada',
       fecha_pago:aOracleFecha(venta.fechaPago),hora_pago:venta.horaPago,ts_pago:venta.tsPago
     });
-    for(const it of items) await oInsert('venta_items',{id:uid('vi'),venta_id:venta.id,producto_id:it.productoId,nombre:it.nombre,precio:it.precio,cantidad:it.cantidad});
+    for(const it of items) await oInsert('venta_items',{id:uid('vi'),venta_id:venta.id,producto_id:it.productoId,nombre:it.nombre,precio:it.precio,cantidad:it.cantidad,ts_agregado:it.tsAgregado});
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
     mostrarToast('Venta registrada · '+fmt(total));
@@ -2798,7 +2810,6 @@ async function restaurarInventarioPorAnulacion(itemsVenta){
     if(!necesita[insumoId]) continue;
     const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
     if(!fresco) continue;
-    if(Number(fresco.stock) <= 0) continue; // agotado: no se inventa stock
     const nuevoStock = Number(fresco.stock) + necesita[insumoId];
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
