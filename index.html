@@ -1939,11 +1939,14 @@ async function ajustarInventarioPorEdicion(itemsOriginales, itemsNuevos){
     if(local) local.stock = nuevoStock;
   }
 }
+let guardandoDetalle = false;
 async function guardarDetallePendiente(){
+  if(guardandoDetalle){ mostrarToast('Guardando, espera un momento…'); return; }
+  guardandoDetalle = true;
   const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
-  if(!v) return;
+  if(!v){ guardandoDetalle = false; return; }
   const nuevosItems = detalleEditTemp.items;
-  if(!nuevosItems.length){ mostrarToast('La cuenta debe tener al menos un producto'); return; }
+  if(!nuevosItems.length){ guardandoDetalle = false; mostrarToast('La cuenta debe tener al menos un producto'); return; }
   const nuevaNota = (detalleEditTemp.nota||'').trim();
   const nuevaMesa = detalleEditTemp.mesa ? parseInt(detalleEditTemp.mesa,10) : null;
   const subtotal = nuevosItems.reduce((a,i)=>a+i.precio*i.cantidad,0);
@@ -1969,12 +1972,12 @@ async function guardarDetallePendiente(){
       total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente',
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
-    insertadosNuevos.length = 0; for(const fila of filasExistentes){ await oDelete('venta_items', fila.id); } await ajustarInventarioPorEdicion(v.items, nuevosItems); v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
+    const filasAhora = await itemsDeVenta(v.id); for(const fila of filasAhora){ if(!insertadosNuevos.includes(fila.id)){ try{ await oDelete('venta_items', fila.id); }catch(_){} } } insertadosNuevos.length = 0; await ajustarInventarioPorEdicion(v.items, nuevosItems); v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
     v.servicioPorcentaje = montoServ>0 ? serv.porcentaje : null; v.servicioMonto = montoServ;
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Pedido actualizado');
     renderCaja(); renderEstadisticas();
-  }catch(e){ console.error(e); for(const vid of insertadosNuevos){ try{ await oDelete('venta_items', vid); }catch(_){} } mostrarToast('No se pudo actualizar el pedido en Oracle'); }
+  }catch(e){ console.error(e); for(const vid of insertadosNuevos){ try{ await oDelete('venta_items', vid); }catch(_){} } mostrarToast('No se pudo actualizar el pedido en Oracle'); } finally { guardandoDetalle = false; }
 }
 function renderCaja(){
   const cerradaBox = document.getElementById('caja-cerrada-box');
