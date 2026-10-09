@@ -1273,8 +1273,10 @@ async function oFetch(path, options={}){
   if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
   if(opts.body) opts.headers['Content-Type'] = 'application/json';
   let r;
-  try{ r = await fetch(ORACLE_BASE + path, opts); }
+  const ctrl = new AbortController(); const tmo = setTimeout(()=>ctrl.abort(), 20000);
+  try{ r = await fetch(ORACLE_BASE + path, { ...opts, signal: ctrl.signal }); }
   catch(e){ throw new Error('No se pudo conectar con Oracle (revisa tu internet o CORS): ' + e.message); }
+  finally{ clearTimeout(tmo); }
   if(!r.ok){ const txt = await r.text().catch(()=>''); throw new Error(`${options.method||'GET'} ${path} → ${r.status}: ${txt}`); }
   if(r.status===204) return null;
   const txt = await r.text();
@@ -1336,7 +1338,7 @@ function totalesVenta(subtotal, desc, servPct){
 }
 async function itemsDeVenta(ventaId){
   const q = encodeURIComponent(JSON.stringify({ venta_id: ventaId }));
-  const data = await oFetch(`venta_items/?q=${q}&limit=200`);
+  const data = await oFetch(`venta_items/?q=${q}&limit=1000`);
   return (data && data.items) || [];
 }
 function fechaOracleAISO(v){ return v ? String(v).slice(0,10) : null; }
@@ -1370,7 +1372,7 @@ function mapearVentas(ventasRows, ventaItemsRows){
     estado: v.estado || 'pagada',
     motivoAnulacion: v.motivo_anulacion || null, anuladaTs: v.anulada_ts!=null?Number(v.anulada_ts):null, anuladaPor: v.anulada_por || null,
     servicioPorcentaje: v.servicio_porcentaje!=null?Number(v.servicio_porcentaje):null, servicioMonto: v.servicio_monto!=null?Number(v.servicio_monto):0,
-    items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad), tsAgregado: it.ts_agregado!=null ? Number(it.ts_agregado) : null })),
+    items: ventaItemsRows.filter(it=>it.venta_id===v.id).map(it=>({ id:it.id, productoId:it.producto_id, nombre:it.nombre, precio:Number(it.precio), cantidad:Number(it.cantidad), tsAgregado: it.ts_agregado!=null ? Number(it.ts_agregado) : null })),
     fechaPago: v.fecha_pago ? fechaOracleAISO(v.fecha_pago) : null,
     horaPago: v.hora_pago || null,
     tsPago: v.ts_pago!=null ? Number(v.ts_pago) : null,
@@ -1958,11 +1960,19 @@ async function guardarDetallePendiente(){
   const descAGuardar = (desc && desc.tipo!=='ninguno' && montoDesc>0) ? { ...desc, monto: montoDesc } : null;
   const serv = detalleEditTemp.servicio; const insertadosNuevos = [];
   try{
-    /* el inventario se ajusta al final, después de guardar */
-    const filasExistentes = await itemsDeVenta(v.id);
-    /* los productos viejos se borran al final, después de guardar los nuevos */
+    const filasDB = await itemsDeVenta(v.id);
+    const conservar = new Set();
     for(const it of nuevosItems){
-      const vidNuevo = uid('vi'); insertadosNuevos.push(vidNuevo); await oInsert('venta_items', { id:vidNuevo, venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado||null });
+      const fila = it.id ? filasDB.find(f=>f.id===it.id) : null;
+      if(fila){
+        conservar.add(it.id);
+        if(Number(fila.cantidad)!==it.cantidad){
+          await oUpdate('venta_items', it.id, { id:it.id, venta_id:v.id, producto_id:fila.producto_id, nombre:fila.nombre, precio:fila.precio, cantidad:it.cantidad, ts_agregado:fila.ts_agregado });
+        }
+      }else{
+        const vidNuevo = uid('vi'); insertadosNuevos.push(vidNuevo); conservar.add(vidNuevo); it.id = vidNuevo;
+        await oInsert('venta_items', { id:vidNuevo, venta_id:v.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado||null });
+      }
     }
     await oUpdate('ventas', v.id, {
       id:v.id, fecha:aOracleFecha(v.fecha), hora:v.hora, ts:v.ts, subtotal,
@@ -1972,7 +1982,7 @@ async function guardarDetallePendiente(){
       total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:nuevaNota, cajero:v.cajero, cerrada:0, mesa:nuevaMesa, estado:'pendiente',
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
-    const filasAhora = await itemsDeVenta(v.id); for(const fila of filasAhora){ if(!insertadosNuevos.includes(fila.id)){ try{ await oDelete('venta_items', fila.id); }catch(_){} } } insertadosNuevos.length = 0; await ajustarInventarioPorEdicion(v.items, nuevosItems); v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
+    for(const fila of filasDB){ if(!conservar.has(fila.id)){ try{ await oDelete('venta_items', fila.id); }catch(_){} } } insertadosNuevos.length = 0; await ajustarInventarioPorEdicion(v.items, nuevosItems); v.items = nuevosItems; v.subtotal = subtotal; v.total = nuevoTotal; v.descuento = descAGuardar; v.nota = nuevaNota; v.mesa = nuevaMesa;
     v.servicioPorcentaje = montoServ>0 ? serv.porcentaje : null; v.servicioMonto = montoServ;
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Pedido actualizado');
