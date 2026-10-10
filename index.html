@@ -1295,18 +1295,6 @@ async function oListAll(tabla){
 }
 async function oInsert(tabla, fila){ return oFetch(`${tabla}/`, { method:'POST', body: fila }); }
 async function oUpdate(tabla, id, fila){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'PUT', body: fila }); }
-/* descuento + propina sobre un subtotal */
-function totalesVenta(subtotal, desc, servPct){
-  let montoDesc = 0;
-  if(desc){
-    if(desc.tipo==='cortesia') montoDesc = subtotal;
-    else if(desc.tipo==='porcentaje') montoDesc = Math.min(subtotal, subtotal*desc.valor/100);
-    else if(desc.tipo==='valor') montoDesc = Math.min(subtotal, desc.valor);
-  }
-  const base = Math.max(0, subtotal - montoDesc);
-  const montoServ = servPct>0 ? Math.round(base*servPct/100) : 0;
-  return { montoDesc, montoServ, total: base + montoServ };
-}
 async function oDelete(tabla, id){ return oFetch(`${tabla}/${encodeURIComponent(id)}`, { method:'DELETE' }); }
 
 /* arma la fila COMPLETA de una venta para el PUT (ORDS reemplaza toda la fila,
@@ -1813,14 +1801,56 @@ async function confirmarCobroPendiente(){
 function abrirModalDetallePendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
-  detalleEditTemp = { ventaId: id, items: v.items.map(it=>({...it})), nota: v.nota || '', mesa: v.mesa || '',
+  detalleEditTemp = { ventaId: id, editFecha: -1, items: v.items.map(it=>({...it})), nota: v.nota || '', mesa: v.mesa || '',
     descuento: v.descuento ? { ...v.descuento } : { tipo:'ninguno', valor:0, motivo:'' },
     servicio: { activo: !!(v.servicioPorcentaje>0), porcentaje: v.servicioPorcentaje || 0 }
   };
   renderModalDetallePendiente();
 }
+
+function diaDeTs(ts){
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+/* día (YYYY-MM-DD) al que pertenece un producto; si no tiene fecha propia, usa la de la cuenta */
+function diaItem(it, v){
+  return it && it.tsAgregado ? diaDeTs(it.tsAgregado) : ((v && v.fecha) || hoyISO());
+}
+function editarFechaItem(idx){
+  detalleEditTemp.editFecha = (detalleEditTemp.editFecha === idx) ? -1 : idx;
+  renderModalDetallePendiente();
+}
+function aplicarFechaItem(idx, iso){
+  if(!iso) return;
+  const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
+  const items = detalleEditTemp.items;
+  const it = items[idx];
+  const base = it.tsAgregado ? new Date(it.tsAgregado) : new Date();
+  const [y,m,d] = iso.split('-').map(Number);
+  it.tsAgregado = new Date(y, m-1, d, base.getHours(), base.getMinutes(), base.getSeconds()).getTime();
+  detalleEditTemp.editFecha = -1;
+  const j = items.findIndex((x,k)=>k!==idx && x.productoId===it.productoId && x.precio===it.precio && diaItem(x,v)===iso);
+  if(j>=0){ items[j].cantidad += it.cantidad; items.splice(idx,1); }
+  renderModalDetallePendiente();
+}
+function htmlConsumoPorDia(items, v){
+  const por = {};
+  items.forEach(i=>{ const d = diaItem(i,v); por[d] = (por[d]||0) + i.precio*i.cantidad; });
+  const dias = Object.keys(por).sort();
+  if(dias.length < 2) return '';
+  return dias.map(d=>`<div class="fila-simple" style="font-size:.78rem; color:var(--concreto);"><span class="n">Consumo del ${fechaCorta(d)}</span><span class="p">${fmt(por[d])}</span></div>`).join('');
+}
+
 function cambiarCantidadDetalle(idx, delta){
   const it = detalleEditTemp.items[idx];
+  const v = CAJA.ventas.find(x=>x.id===detalleEditTemp.ventaId);
+  if(delta > 0 && diaItem(it, v) !== hoyISO()){
+    const j = detalleEditTemp.items.findIndex((x,k)=>k!==idx && x.productoId===it.productoId && x.precio===it.precio && diaItem(x,v)===hoyISO());
+    if(j >= 0) detalleEditTemp.items[j].cantidad += delta;
+    else detalleEditTemp.items.splice(idx+1, 0, { productoId:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:delta, tsAgregado:Date.now() });
+    renderModalDetallePendiente();
+    return;
+  }
   it.cantidad += delta;
   if(it.cantidad<=0) detalleEditTemp.items.splice(idx,1);
   renderModalDetallePendiente();
@@ -1883,11 +1913,12 @@ function renderModalDetallePendiente(){
     <div style="margin-bottom:14px;">
     ${detalleEditTemp.items.length ? detalleEditTemp.items.map((i,idx)=>`
       <div class="recibo-item">
-        <div class="ri-nom">${i.nombre}<small>${fmt(i.precio)} c/u</small><small>${textoFechaAgregado(i, v)}</small></div>
+        <div class="ri-nom">${i.nombre}<small>${fmt(i.precio)} c/u</small><small>${textoFechaAgregado(i, v)} <button type="button" class="link-btn solo-admin" onclick="editarFechaItem(${idx})">cambiar</button></small>${detalleEditTemp.editFecha===idx ? `<input type="date" value="${diaItem(i,v)}" max="${hoyISO()}" onchange="aplicarFechaItem(${idx}, this.value)" style="margin-top:6px;">` : ''}</div>
         <div class="qty-ctrl"><button onclick="cambiarCantidadDetalle(${idx},-1)">–</button><span class="n">${i.cantidad}</span><button onclick="cambiarCantidadDetalle(${idx},1)">+</button></div>
         <div class="ri-precio">${fmt(i.precio*i.cantidad)}</div>
       </div>`).join('') : '<div class="vacio">Sin productos</div>'}
     </div>
+    ${htmlConsumoPorDia(detalleEditTemp.items, v)}
     <div class="fila-simple"><span class="n">Subtotal</span><span class="p">${fmt(subtotal)}</span></div>
     ${montoDesc>0 ? `<div class="fila-simple"><span class="n" style="color:var(--vino-suave);">${d.tipo==='cortesia'?'Cortesía':'Descuento'} (${d.motivo})</span><span class="p" style="color:var(--vino-suave);">-${fmt(montoDesc)}</span></div>` : ''}
     <div class="solo-admin">
@@ -1966,8 +1997,10 @@ async function guardarDetallePendiente(){
       const fila = it.id ? filasDB.find(f=>f.id===it.id) : null;
       if(fila){
         conservar.add(it.id);
-        if(Number(fila.cantidad)!==it.cantidad){
-          await oUpdate('venta_items', it.id, { id:it.id, venta_id:v.id, producto_id:fila.producto_id, nombre:fila.nombre, precio:fila.precio, cantidad:it.cantidad, ts_agregado:fila.ts_agregado });
+        const tsViejo = fila.ts_agregado!=null ? Number(fila.ts_agregado) : null;
+        const tsNuevo = it.tsAgregado!=null ? Number(it.tsAgregado) : null;
+        if(Number(fila.cantidad)!==it.cantidad || tsViejo!==tsNuevo){
+          await oUpdate('venta_items', it.id, { id:it.id, venta_id:v.id, producto_id:fila.producto_id, nombre:fila.nombre, precio:fila.precio, cantidad:it.cantidad, ts_agregado:tsNuevo });
         }
       }else{
         const vidNuevo = uid('vi'); insertadosNuevos.push(vidNuevo); conservar.add(vidNuevo); it.id = vidNuevo;
