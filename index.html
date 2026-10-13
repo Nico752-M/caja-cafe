@@ -1510,13 +1510,15 @@ function descontarInventarioPorVenta(itemsVenta){
     if(!prod || !prod.receta || !prod.receta.length) return;
     prod.receta.forEach(r=>{
       const ins = INVENTARIO.lista.find(i=>i.id===r.insumoId);
-      if(ins) ins.stock = Math.max(0, ins.stock - r.cantidad*it.cantidad);
+      if(ins) ins.stock = ins.stock - r.cantidad*it.cantidad; /* puede quedar negativo (oculto en pantalla) */
     });
   });
 }
 /* BLOQUEO DE STOCK DESACTIVADO: se puede seguir vendiendo aunque falten insumos.
    Para volver a activarlo, pon PERMITIR_VENTA_SIN_STOCK = false. */
 const PERMITIR_VENTA_SIN_STOCK = true;
+/* El stock guardado en Oracle puede ser negativo (lo que faltó al vender sin inventario).
+   La pantalla siempre muestra máx(0, stock). Al sumar/restar a mano en Inventario se parte de lo visible. */
 function stockDisponibleParaProducto(prod){
   if(PERMITIR_VENTA_SIN_STOCK) return Infinity;
   if(!prod.receta || !prod.receta.length) return Infinity;
@@ -1970,7 +1972,7 @@ async function ajustarInventarioPorEdicion(itemsOriginales, itemsNuevos){
     if(!necesita[insumoId]) continue;
     const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
     if(!fresco) continue;
-    const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
+    const nuevoStock = Number(fresco.stock) - necesita[insumoId]; /* puede quedar negativo (oculto en pantalla) */
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
     if(local) local.stock = nuevoStock;
@@ -2849,7 +2851,7 @@ async function descontarInventarioEnOracle(itemsVenta){
   for(const insumoId of Object.keys(necesita)){
     const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
     if(!fresco) continue;
-    const nuevoStock = Math.max(0, Number(fresco.stock) - necesita[insumoId]);
+    const nuevoStock = Number(fresco.stock) - necesita[insumoId]; /* puede quedar negativo (oculto en pantalla) */
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
     if(local) local.stock = nuevoStock;
@@ -3457,7 +3459,7 @@ function renderInventario(){
     return `<tr class="${agotado||bajo?'bajo':''}">
       <td>${i.nombre}</td>
       <td class="mono">${i.unidad}</td>
-      <td><span class="stock-badge ${clase}">${i.stock}${agotado?' · agotado':''}</span></td>
+      <td><span class="stock-badge ${clase}">${Math.max(0, i.stock)}${agotado?' · agotado':''}</span></td>
       <td class="mono">${i.minimo}</td>
       <td><div style="display:flex; gap:6px;">
         <button class="btn btn-outline btn-sm" onclick="ajustarStock('${i.id}',-1)">–</button>
@@ -3489,7 +3491,7 @@ async function agregarInsumo(e){
 async function ajustarStock(id, delta){
   try{
     const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
-    const nuevoStock = Math.max(0, Number(fresco.stock) + delta);
+    const nuevoStock = Math.max(0, Math.max(0, Number(fresco.stock)) + delta); /* parte de lo visible: la deuda oculta se borra */
     await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const i = INVENTARIO.lista.find(x=>x.id===id);
     if(i) i.stock = nuevoStock;
@@ -3502,7 +3504,7 @@ async function ajustarStockInput(id){
   if(!val) return;
   try{
     const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
-    const nuevoStock = Math.max(0, Number(fresco.stock) + val);
+    const nuevoStock = Math.max(0, Math.max(0, Number(fresco.stock)) + val); /* parte de lo visible: la deuda oculta se borra */
     await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const i = INVENTARIO.lista.find(x=>x.id===id);
     if(i) i.stock = nuevoStock;
