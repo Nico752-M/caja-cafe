@@ -1514,7 +1514,11 @@ function descontarInventarioPorVenta(itemsVenta){
     });
   });
 }
+/* BLOQUEO DE STOCK DESACTIVADO: se puede seguir vendiendo aunque falten insumos.
+   Para volver a activarlo, pon PERMITIR_VENTA_SIN_STOCK = false. */
+const PERMITIR_VENTA_SIN_STOCK = true;
 function stockDisponibleParaProducto(prod){
+  if(PERMITIR_VENTA_SIN_STOCK) return Infinity;
   if(!prod.receta || !prod.receta.length) return Infinity;
   let min = Infinity;
   prod.receta.forEach(r=>{
