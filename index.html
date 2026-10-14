@@ -2780,6 +2780,7 @@ async function dejarPendiente(){
     }
     await descontarInventarioEnOracle(items);
     CAJA.ventas.push(venta);
+    imprimirComandaCocina(venta);
     mostrarToast('Pedido dejado pendiente' + (venta.mesa ? ' · Mesa '+venta.mesa : ''));
     vaciarPedido();
     renderCaja(); renderResumen(); renderEstadisticas();
@@ -2967,6 +2968,46 @@ function renderPedidosAnulados(){
       </span>
       <span class="p">${fmt(v.total)}</span>
     </div>`).join('') : '<div class="vacio">No hay pedidos anulados hoy</div>';
+}
+
+/* =========================================================
+   COMANDA DE COCINA (se imprime al dejar un pedido pendiente)
+   ========================================================= */
+function imprimirComandaCocina(venta){
+  const el = document.getElementById('recibo-imprimible');
+  if(!el || !venta || !Array.isArray(venta.items)) return;
+
+  const fechaHora = new Date(venta.ts).toLocaleString('es-CO', {
+    day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  });
+
+  el.innerHTML = `
+    <h4>CAFÉ REAL</h4>
+    <div class="ri-sub">COMANDA DE COCINA</div>
+    <div class="ri-linea"></div>
+    <div class="ri-fila" style="font-weight:bold;font-size:13px;">
+      <span>${venta.mesa ? 'MESA '+venta.mesa : 'PARA LLEVAR'}</span>
+      <span>${venta.hora || ''}</span>
+    </div>
+    <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
+    ${venta.cajero ? `<div class="ri-fila"><span>ATENDIÓ:</span><span>${venta.cajero}</span></div>` : ''}
+    <div class="ri-linea"></div>
+    ${venta.items.map(i => `
+      <div style="font-size:13px;font-weight:bold;margin:7px 0;overflow-wrap:anywhere;">
+        ${i.cantidad} × ${i.nombre}
+      </div>
+    `).join('')}
+    <div class="ri-linea"></div>
+    <div style="font-size:11px;font-weight:bold;">NOTA DEL PEDIDO</div>
+    <div style="font-size:12px;margin:4px 0;overflow-wrap:anywhere;">
+      ${venta.nota || 'Sin nota'}
+    </div>
+    <div class="ri-linea"></div>
+    <div class="centrado">FIN DE COMANDA</div>
+  `;
+
+  setTimeout(() => window.print(), 80);
 }
 
 /* =========================================================
