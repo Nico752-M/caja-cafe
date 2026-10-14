@@ -2973,41 +2973,55 @@ function renderPedidosAnulados(){
 /* =========================================================
    COMANDA DE COCINA (se imprime al dejar un pedido pendiente)
    ========================================================= */
+/* La impresión debe ejecutarse solo en el equipo de caja, nunca en el celular.
+   La cola evita que dos pedidos recibidos seguidos se mezclen en el mismo ticket. */
+const idsComandasEncoladas = new Set();
+let colaImpresionComandas = Promise.resolve();
+function esEquipoCaja(){
+  return !/(Android|iPhone|iPad|iPod|Mobile)/i.test(navigator.userAgent);
+}
 function imprimirComandaCocina(venta){
-  const el = document.getElementById('recibo-imprimible');
-  if(!el || !venta || !Array.isArray(venta.items)) return;
-
-  const fechaHora = new Date(venta.ts).toLocaleString('es-CO', {
-    day:'2-digit', month:'2-digit', year:'numeric',
-    hour:'2-digit', minute:'2-digit', hour12:false
-  });
-
-  el.innerHTML = `
-    <h4>CAFÉ REAL</h4>
-    <div class="ri-sub">COMANDA DE COCINA</div>
-    <div class="ri-linea"></div>
-    <div class="ri-fila" style="font-weight:bold;font-size:13px;">
-      <span>${venta.mesa ? 'MESA '+venta.mesa : 'PARA LLEVAR'}</span>
-      <span>${venta.hora || ''}</span>
-    </div>
-    <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
-    ${venta.cajero ? `<div class="ri-fila"><span>ATENDIÓ:</span><span>${venta.cajero}</span></div>` : ''}
-    <div class="ri-linea"></div>
-    ${venta.items.map(i => `
-      <div style="font-size:13px;font-weight:bold;margin:7px 0;overflow-wrap:anywhere;">
-        ${i.cantidad} × ${i.nombre}
+  if(!esEquipoCaja() || !venta || !venta.id || !Array.isArray(venta.items)) return;
+  if(idsComandasEncoladas.has(venta.id)) return;
+  idsComandasEncoladas.add(venta.id);
+  colaImpresionComandas = colaImpresionComandas.then(()=>new Promise(resolve=>{
+    const el = document.getElementById('recibo-imprimible');
+    if(!el){ idsComandasEncoladas.delete(venta.id); resolve(); return; }
+    const fechaHora = new Date(venta.ts || Date.now()).toLocaleString('es-CO', {
+      day:'2-digit', month:'2-digit', year:'numeric',
+      hour:'2-digit', minute:'2-digit', hour12:false
+    });
+    el.innerHTML = `
+      <h4>CAFÉ REAL</h4>
+      <div class="ri-sub">COMANDA DE COCINA</div>
+      <div class="ri-linea"></div>
+      <div class="ri-fila" style="font-weight:bold;font-size:13px;">
+        <span>${venta.mesa ? 'MESA '+venta.mesa : 'PARA LLEVAR'}</span>
+        <span>${venta.hora || ''}</span>
       </div>
-    `).join('')}
-    <div class="ri-linea"></div>
-    <div style="font-size:11px;font-weight:bold;">NOTA DEL PEDIDO</div>
-    <div style="font-size:12px;margin:4px 0;overflow-wrap:anywhere;">
-      ${venta.nota || 'Sin nota'}
-    </div>
-    <div class="ri-linea"></div>
-    <div class="centrado">FIN DE COMANDA</div>
-  `;
-
-  setTimeout(() => window.print(), 80);
+      <div class="ri-fila"><span>FECHA:</span><span>${fechaHora}</span></div>
+      ${venta.cajero ? `<div class="ri-fila"><span>ATENDIÓ:</span><span>${venta.cajero}</span></div>` : ''}
+      <div class="ri-linea"></div>
+      ${venta.items.map(i => `
+        <div style="font-size:13px;font-weight:bold;margin:7px 0;overflow-wrap:anywhere;">
+          ${i.cantidad} × ${i.nombre}
+        </div>
+      `).join('')}
+      <div class="ri-linea"></div>
+      <div style="font-size:11px;font-weight:bold;">NOTA DEL PEDIDO</div>
+      <div style="font-size:12px;margin:4px 0;overflow-wrap:anywhere;">
+        ${venta.nota || 'Sin nota'}
+      </div>
+      <div class="ri-linea"></div>
+      <div class="centrado">FIN DE COMANDA</div>
+    `;
+    setTimeout(()=>{
+      try { window.print(); }
+      catch(e){ console.error('No se pudo imprimir la comanda', e); idsComandasEncoladas.delete(venta.id); }
+      /* Deja tiempo a Chrome para terminar el trabajo de impresión antes del siguiente ticket. */
+      setTimeout(resolve, 1800);
+    }, 80);
+  }));
 }
 
 /* =========================================================
@@ -4229,7 +4243,7 @@ async function refrescoAutomatico(){
     /* ¿qué pedidos pendientes son nuevos para esta pantalla? */
     const pendientesAhora = pedidosPendientes();
     const idsAhora = new Set(pendientesAhora.map(v=>v.id));
-    const nuevos = pendientesAhora.filter(v=>!idsPendientesConocidos.has(v.id) && v.cajero !== (SESION && SESION.nombre));
+    const nuevos = pendientesAhora.filter(v=>!idsPendientesConocidos.has(v.id));
     idsPendientesConocidos = idsAhora;
 
     if(CAJA.estado.abierta !== cajaEstabaAbierta){ renderCaja(); }
@@ -4237,6 +4251,9 @@ async function refrescoAutomatico(){
     renderResumen();
 
     if(nuevos.length){
+      /* Si el pedido llegó desde otro dispositivo, la caja lo imprime aquí.
+         La función bloquea los móviles y deduplica por ID de venta. */
+      if(esEquipoCaja()) nuevos.forEach(v=>imprimirComandaCocina(v));
       IDS_PEDIDOS_NUEVOS = new Set([...IDS_PEDIDOS_NUEVOS, ...nuevos.map(v=>v.id)]);
       NOTIF_PENDIENTES = new Set([...NOTIF_PENDIENTES, ...nuevos.map(v=>v.id)]);
       renderPedidosPendientes();
