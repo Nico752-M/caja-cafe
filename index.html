@@ -2692,6 +2692,10 @@ async function confirmarDivision(){
     await oDelete('ventas', v.id);
     CAJA.ventas = CAJA.ventas.filter(x=>x.id!==v.id);
     nuevasVentas.forEach(nv=>CAJA.ventas.push(nv));
+    nuevasVentas.forEach(nv=>{
+      idsPendientesConocidos.add(nv.id);
+      idsComandasEncoladas.add(nv.id);
+    });
     document.getElementById('modal-root').innerHTML = '';
     mostrarToast('Cuenta dividida en ' + nuevasVentas.length + ' cuentas');
     divisionState = null;
