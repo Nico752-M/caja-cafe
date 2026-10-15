@@ -523,11 +523,32 @@ textarea{resize:vertical; min-height:56px;}
 
 /* ---------------- IMPRESION ---------------- */
 #recibo-imprimible{display:none;}
+
+/* ---------------- VISTA PREVIA DE IMPRESIÓN (ticket) ---------------- */
+.pv-overlay{position:fixed; inset:0; z-index:500; background:rgba(10,8,5,.68); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; padding:16px;}
+.pv-box{background:var(--hierro-2); border:1px solid var(--linea-fuerte); border-radius:14px; width:100%; max-width:380px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden;}
+.pv-head{padding:14px 18px 10px; text-align:center; border-bottom:1px solid var(--linea);}
+.pv-head h3{font-size:1rem; margin-bottom:2px;}
+.pv-head p{font-size:.74rem; color:var(--concreto);}
+.pv-scroll{overflow-y:auto; padding:22px 14px 26px; flex:1; min-height:0;}
+.pv-papel{position:relative; background:#fff; color:#000; font-family:'IBM Plex Mono',monospace; width:100%; max-width:290px; margin:0 auto; padding:14px 12px 16px; box-shadow:0 6px 20px rgba(0,0,0,.28);}
+.pv-papel .ri-linea{border-top:1px dashed #000; margin:6px 0;}
+.pv-papel .ri-fila{display:flex; justify-content:space-between; gap:6px; font-size:11px; margin:2px 0;}
+.pv-papel .ri-fila span:last-child{text-align:right; overflow-wrap:anywhere;}
+.pv-papel h4{font-size:15px; text-align:center; margin-bottom:1px; letter-spacing:.06em;}
+.pv-papel .ri-sub{text-align:center; font-size:9px; letter-spacing:.1em; margin-bottom:6px;}
+.pv-papel .centrado{text-align:center; font-size:10px;}
+.pv-papel .ri-total-final{font-size:13px; font-weight:bold; margin:4px 0;}
+.pv-acciones{display:flex; gap:10px; padding:12px 16px; border-top:1px solid var(--linea); background:var(--panel);}
+.pv-acciones button{flex:1;}
+
 @media print{
   body > *:not(#recibo-imprimible){display:none !important;}
-  #recibo-imprimible{display:block !important; width:78mm; padding:6px; font-family:'IBM Plex Mono',monospace; color:#000; background:#fff;}
+  #recibo-imprimible{display:block !important; width:100%; max-width:66mm; padding:0 1mm; font-family:'IBM Plex Mono',monospace; color:#000; background:#fff;}
   #recibo-imprimible .ri-linea{border-top:1px dashed #000; margin:6px 0;}
   #recibo-imprimible .ri-fila{display:flex; justify-content:space-between; font-size:11px; margin:2px 0;}
+  #recibo-imprimible .ri-fila{gap:6px;}
+  #recibo-imprimible .ri-fila span:last-child{text-align:right; overflow-wrap:anywhere;}
   #recibo-imprimible h4{font-size:15px; text-align:center; margin-bottom:1px; letter-spacing:.06em;}
   #recibo-imprimible .ri-sub{text-align:center; font-size:9px; letter-spacing:.1em; margin-bottom:6px;}
   #recibo-imprimible .centrado{text-align:center; font-size:10px;}
@@ -3029,6 +3050,40 @@ function imprimirComandaCocina(venta){
 }
 
 /* =========================================================
+   VISTA PREVIA ANTES DE IMPRIMIR (ticket)
+   ========================================================= */
+function cerrarVistaPreviaImpresion(){
+  const pv = document.getElementById('pv-root');
+  if(pv) pv.remove();
+  document.removeEventListener('keydown', _pvTeclado);
+}
+function _pvTeclado(e){ if(e.key==='Escape') cerrarVistaPreviaImpresion(); }
+function vistaPreviaImpresion(titulo){
+  const el = document.getElementById('recibo-imprimible');
+  if(!el) return;
+  cerrarVistaPreviaImpresion();
+  const pv = document.createElement('div');
+  pv.id = 'pv-root';
+  pv.innerHTML = `<div class="pv-overlay"><div class="pv-box">
+      <div class="pv-head"><h3>${titulo||'Vista previa'}</h3><p>Así se verá al imprimir. Revisa y confirma.</p></div>
+      <div class="pv-scroll"><div class="pv-papel">${el.innerHTML}</div></div>
+      <div class="pv-acciones">
+        <button class="btn btn-outline" id="pv-cancelar">Cancelar</button>
+        <button class="btn btn-oro" id="pv-confirmar">🖨 Confirmar e imprimir</button>
+      </div>
+    </div></div>`;
+  document.body.appendChild(pv);
+  pv.querySelector('#pv-cancelar').onclick = cerrarVistaPreviaImpresion;
+  const htmlTicket = el.innerHTML;
+  pv.querySelector('#pv-confirmar').onclick = ()=>{
+    cerrarVistaPreviaImpresion();
+    el.innerHTML = htmlTicket;
+    setTimeout(()=>window.print(), 80);
+  };
+  document.addEventListener('keydown', _pvTeclado);
+}
+
+/* =========================================================
    IMPRESIÓN DE RECIBO (impresora térmica del mostrador)
    ========================================================= */
 function imprimirVenta(venta){
@@ -3057,7 +3112,7 @@ function imprimirVenta(venta){
     <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
   `;
-  setTimeout(()=>window.print(), 80);
+  vistaPreviaImpresion('Recibo de venta');
 }
 function imprimirPrecuenta(id){
   const v = CAJA.ventas.find(x=>x.id===id);
@@ -3090,7 +3145,7 @@ function imprimirPrecuenta(id){
     <div class="centrado">¡Gracias por visitarnos!</div>
     <div class="centrado">IG: @caferealtulua</div>
   `;
-  setTimeout(()=>window.print(), 80);
+  vistaPreviaImpresion('Pre-cuenta');
 }
 function renderCierresAnteriores(){
   const cierres = [...CAJA.cierres].sort((a,b)=>b.id.localeCompare(a.id));
@@ -3132,7 +3187,7 @@ function imprimirCierre(c){
     <div class="ri-linea"></div>
     <div class="centrado">Reporte generado por Café Real · Caja</div>
   `;
-  setTimeout(()=>window.print(), 80);
+  vistaPreviaImpresion('Cierre de caja');
 }
 
 function verDetalleCierre(c){
