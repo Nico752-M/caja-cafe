@@ -423,11 +423,11 @@ textarea{resize:vertical; min-height:56px;}
 .riel-titulo span{font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; color:var(--concreto);}
 .riel-titulo .cuenta{font-family:'IBM Plex Mono',monospace; font-size:.68rem; color:var(--oro-suave); letter-spacing:normal; text-transform:none;}
 .riel-barra{height:8px; border-radius:3px; margin:10px 0 0; background:linear-gradient(180deg,#8b8b8b,#5a5a5a 45%,#3a3a3a); box-shadow:0 2px 4px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.25);}
-.riel-track{display:flex; gap:16px; overflow-x:auto; padding:8px 6px 20px; margin-top:-3px; scrollbar-width:thin; -webkit-mask-image:linear-gradient(to right, transparent 0, black 14px, black calc(100% - 14px), transparent 100%); transition:gap .2s;}
+.riel-track{display:flex; flex-wrap:nowrap; align-items:flex-start; gap:16px; overflow-x:auto; overflow-y:hidden; padding:8px 6px 20px; margin-top:-3px; scrollbar-width:thin; scrollbar-color:var(--oro) rgba(3,73,68,.12); -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; -webkit-mask-image:linear-gradient(to right, transparent 0, black 14px, black calc(100% - 14px), transparent 100%); transition:gap .2s;}
 .riel-vacio{padding:30px 10px 24px; text-align:center; color:var(--concreto); font-size:.85rem;}
 .riel-vacio.hidden{display:none;}
 
-.comanda{flex:0 0 auto; width:150px; position:relative; padding-top:12px; animation:balanceo 4.5s ease-in-out infinite; transition:width .2s;}
+.comanda{flex:0 0 150px; width:150px; min-width:150px; box-sizing:border-box; position:relative; padding-top:12px; animation:balanceo 4.5s ease-in-out infinite;}
 .comanda:nth-child(2n){animation-duration:5.2s;}
 .comanda:nth-child(3n){animation-duration:3.9s; animation-delay:.4s;}
 .comanda:hover{animation-play-state:paused; transform:rotate(0deg) !important;}
@@ -614,10 +614,7 @@ html,body{overflow-x:hidden; width:100%;}
   .modal-actions{flex-wrap:wrap;}
 }
 
-/* Comandas del riel un poco más angostas para ver más de un vistazo */
-@media (max-width:600px){
-  .comanda{width:128px;}
-}
+/* Las comandas mantienen el ancho fijo también en pantallas pequeñas; el riel permite desplazamiento horizontal. */
 
 /* Topbar/tabs: toques más grandes y texto que no se corta en celular */
 @media (max-width:480px){
@@ -1687,9 +1684,8 @@ function renderPedidosPendientes(){
   const cont = document.getElementById('pedidos-pendientes-lista');
   if(!cont) return;
   const pendientes = pedidosPendientes();
+  // Las comandas conservan siempre su tamaño; si se acumulan, se recorren horizontalmente.
   cont.classList.remove('densidad-compacta','densidad-mini');
-  if(pendientes.length>=8) cont.classList.add('densidad-mini');
-  else if(pendientes.length>=5) cont.classList.add('densidad-compacta');
   const contador = document.getElementById('riel-contador');
   if(contador) contador.textContent = pendientes.length + (pendientes.length===1?' comanda':' comandas');
   const vacio = document.getElementById('riel-vacio');
@@ -1705,6 +1701,7 @@ function renderPedidosPendientes(){
           <button onclick="abrirModalDetallePendiente('${v.id}')"><span class="full">Ver</span><span class="corta">V</span></button>
           <button onclick="iniciarAgregarAPendiente('${v.id}')"><span class="full">+ Agregar</span><span class="corta">+</span></button>
           <button style="grid-column:1/3;" onclick="imprimirPrecuenta('${v.id}')"><span class="full">🧾 Pre-cuenta</span><span class="corta">🧾</span></button>
+          <button style="grid-column:1/3;" onclick="abrirModalMoverMesa('${v.id}')"><span class="full">⇄ Mover de mesa</span><span class="corta">⇄</span></button>
           ${esAdmin() ? `
           <button onclick="abrirModalDividir('${v.id}')"><span class="full">Dividir</span><span class="corta">÷</span></button>
           <button class="anular" onclick="abrirModalAnularVenta('${v.id}')"><span class="full">Anular</span><span class="corta">✕</span></button>
@@ -1825,6 +1822,288 @@ async function confirmarCobroPendiente(){
     imprimirVenta(v); renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){ console.error(e); mostrarToast('No se pudo registrar el cobro en Oracle'); }
 }
+/* =========================================================
+   CAMBIO DE MESA / UNIR CUENTAS
+   ========================================================= */
+let moverMesaActual = null;
+function etiquetaMesa(m){ return m ? 'Mesa '+m : 'Para llevar'; }
+function modalProcesando(){
+  document.getElementById('modal-root').innerHTML = '<div class="overlay"><div class="modal-box"><p style="margin:0;">Procesando…</p></div></div>';
+}
+function abrirModalMoverMesa(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v || v.estado!=='pendiente') return;
+  moverMesaActual = { id };
+  renderModalMoverMesa();
+}
+function renderModalMoverMesa(){
+  const v = CAJA.ventas.find(x=>x.id===moverMesaActual.id);
+  if(!v) return;
+  const etiquetas = { libre:'Libre', ocupada:'Ocupada', reservada:'Reservada' };
+  const tiles = Array.from({length:15},(_,i)=>i+1).map(n=>{
+    const esActual = v.mesa===n;
+    const est = estadoMesaAhora(n);
+    return `<button type="button" class="mesa-tile ${est}" ${esActual?'disabled style="opacity:.3; cursor:not-allowed;"':''} onclick="elegirMesaDestino(${n})">
+      <span class="num">${n}</span><span class="estado-txt">${esActual?'Aquí':etiquetas[est]}</span>
+    </button>`;
+  }).join('');
+  document.getElementById('modal-root').innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Mover cuenta</h3>
+    <div class="modal-sub">${etiquetaMesa(v.mesa)}${v.nota?' · '+escaparTexto(v.nota):''} · ${resumenItems(v.items)} · ${fmt(v.total)}</div>
+    <div style="font-size:.78rem; color:var(--concreto); margin-bottom:12px;">Toca la mesa a la que va esta cuenta</div>
+    <div class="mesas-grid">${tiles}</div>
+    ${v.mesa ? `<button class="btn btn-outline btn-block" onclick="elegirMesaDestino(null)">Pasar a "Para llevar"</button>` : ''}
+    <div style="border-top:1px dashed var(--linea-fuerte); margin-top:18px;"></div>
+    <button class="btn btn-oro btn-block" onclick="abrirModalPasarProductos('${v.id}')">Pasar solo algunos productos…</button>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="document.getElementById('modal-root').innerHTML=''">Cancelar</button>
+    </div>
+  </div></div>`;
+}
+function elegirMesaDestino(n){
+  const v = CAJA.ventas.find(x=>x.id===moverMesaActual.id);
+  if(!v) return;
+  const otras = n===null ? [] : CAJA.ventas.filter(x=>x.estado==='pendiente' && x.id!==v.id && x.mesa===n);
+  if(!otras.length){ moverCuentaAMesa(v.id, n); return; }
+  document.getElementById('modal-root').innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>La Mesa ${n} ya tiene cuenta</h3>
+    <div class="modal-sub">¿Qué quieres hacer con la cuenta que estás moviendo (${fmt(v.total)})?</div>
+    ${otras.map(o=>`
+      <button class="btn btn-oro btn-block" style="text-align:left;" onclick="fusionarCuentas('${v.id}','${o.id}')">
+        Unir con la cuenta de ${o.nota ? escaparTexto(o.nota) : 'Mesa '+n}<br>
+        <span style="font-weight:400; font-size:.76rem;">${resumenItems(o.items)} · ${fmt(o.total)}</span>
+      </button>`).join('')}
+    <button class="btn btn-outline btn-block" onclick="moverCuentaAMesa('${v.id}', ${n})">Dejar como cuenta aparte en la Mesa ${n}</button>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="renderModalMoverMesa()">Volver</button>
+    </div>
+  </div></div>`;
+}
+async function moverCuentaAMesa(id, mesa){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v) return;
+  modalProcesando();
+  try{
+    await oUpdate('ventas', v.id, filaVentaOracle(v, { mesa }));
+    v.mesa = mesa;
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Cuenta movida a ' + etiquetaMesa(mesa));
+    renderCaja(); renderResumen();
+  }catch(e){
+    console.error(e);
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('No se pudo mover la cuenta en Oracle');
+  }
+}
+function fusionarCuentas(origenId, destinoId){
+  const o = CAJA.ventas.find(x=>x.id===origenId);
+  const d = CAJA.ventas.find(x=>x.id===destinoId);
+  if(!o || !d) return;
+  if(o.descuento || d.descuento || o.servicioMonto>0 || d.servicioMonto>0){
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Para unir cuentas, primero quita el descuento o la propina de ambas');
+    return;
+  }
+  confirmar(`¿Unir las dos cuentas de la Mesa ${d.mesa}? Quedará una sola cuenta de ${fmt(o.subtotal + d.subtotal)}. No se puede deshacer.`, async ()=>{
+    modalProcesando();
+    try{
+      const filas = await itemsDeVenta(o.id);
+      for(const f of filas){
+        await oUpdate('venta_items', f.id, { id:f.id, venta_id:d.id, producto_id:f.producto_id, nombre:f.nombre, precio:f.precio, cantidad:f.cantidad, ts_agregado: f.ts_agregado!=null ? f.ts_agregado : null });
+      }
+      const subtotal = d.subtotal + o.subtotal;
+      await oUpdate('ventas', d.id, filaVentaOracle(d, { subtotal, total:subtotal, servicio_monto:0 }));
+      await oDelete('ventas', o.id);
+      d.items = d.items.concat(o.items);
+      d.subtotal = subtotal; d.total = subtotal;
+      CAJA.ventas = CAJA.ventas.filter(x=>x.id!==o.id);
+      idsPendientesConocidos.delete(o.id);
+      IDS_PEDIDOS_NUEVOS.delete(o.id);
+      document.getElementById('modal-root').innerHTML = '';
+      mostrarToast('Cuentas unidas · Mesa ' + d.mesa);
+      renderCaja(); renderResumen(); renderEstadisticas();
+    }catch(e){
+      console.error(e);
+      document.getElementById('modal-root').innerHTML = '';
+      mostrarToast('No se pudo unir las cuentas. Pulsa 🔄 para revisar cómo quedaron');
+    }
+  });
+}
+
+/* =========================================================
+   PASAR PRODUCTOS SUELTOS A OTRA CUENTA
+   ========================================================= */
+let pasarProd = null;
+function claveItem(i){ return i.productoId + '|' + i.precio; }
+function lineasAgrupadas(v){
+  const por = {};
+  v.items.forEach(i=>{
+    const k = claveItem(i);
+    if(!por[k]) por[k] = { key:k, productoId:i.productoId, nombre:i.nombre, precio:i.precio, cantidad:0 };
+    por[k].cantidad += i.cantidad;
+  });
+  return Object.values(por);
+}
+function abrirModalPasarProductos(id){
+  const v = CAJA.ventas.find(x=>x.id===id);
+  if(!v || v.estado!=='pendiente') return;
+  if(v.descuento || v.servicioMonto>0){ mostrarToast('Para pasar productos, primero quita el descuento o la propina de esta cuenta'); return; }
+  pasarProd = { ventaId:id, sel:{} };
+  renderModalPasarProductos();
+}
+function cambiarSelPasar(idx, delta){
+  const v = CAJA.ventas.find(x=>x.id===pasarProd.ventaId);
+  if(!v) return;
+  const l = lineasAgrupadas(v)[idx];
+  const actual = pasarProd.sel[l.key] || 0;
+  const nuevo = Math.max(0, Math.min(l.cantidad, actual + delta));
+  if(nuevo) pasarProd.sel[l.key] = nuevo; else delete pasarProd.sel[l.key];
+  renderModalPasarProductos();
+}
+function renderModalPasarProductos(){
+  const v = CAJA.ventas.find(x=>x.id===pasarProd.ventaId);
+  if(!v) return;
+  const lineas = lineasAgrupadas(v);
+  const totalSel = lineas.reduce((a,l)=>a+(pasarProd.sel[l.key]||0)*l.precio, 0);
+  const haySel = lineas.some(l=>pasarProd.sel[l.key]>0);
+  document.getElementById('modal-root').innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>Pasar productos</h3>
+    <div class="modal-sub">De ${etiquetaMesa(v.mesa)}${v.nota?' · '+escaparTexto(v.nota):''}. Elige cuántos de cada producto quieres pasar.</div>
+    <div style="margin-bottom:14px;">
+    ${lineas.map((l,idx)=>{
+      const s = pasarProd.sel[l.key] || 0;
+      return `<div class="recibo-item">
+        <div class="ri-nom">${escaparTexto(l.nombre)}<small>${fmt(l.precio)} c/u · hay ${l.cantidad}</small></div>
+        <div class="qty-ctrl"><button onclick="cambiarSelPasar(${idx},-1)">–</button><span class="n">${s}</span><button onclick="cambiarSelPasar(${idx},1)">+</button></div>
+        <div class="ri-precio">${fmt(s*l.precio)}</div>
+      </div>`;
+    }).join('')}
+    </div>
+    <div class="fila-simple" style="font-weight:600;"><span class="n">Total a pasar</span><span class="p">${fmt(totalSel)}</span></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="abrirModalMoverMesa('${v.id}')">Volver</button>
+      <button class="btn btn-oro" ${haySel?'':'disabled'} onclick="renderModalDestinoPasar()">Elegir mesa destino</button>
+    </div>
+  </div></div>`;
+}
+function renderModalDestinoPasar(){
+  const v = CAJA.ventas.find(x=>x.id===pasarProd.ventaId);
+  if(!v) return;
+  const etiquetas = { libre:'Libre', ocupada:'Ocupada', reservada:'Reservada' };
+  const tiles = Array.from({length:15},(_,i)=>i+1).map(n=>{
+    const est = estadoMesaAhora(n);
+    return `<button type="button" class="mesa-tile ${est}" onclick="elegirMesaPasar(${n})">
+      <span class="num">${n}</span><span class="estado-txt">${etiquetas[est]}</span>
+    </button>`;
+  }).join('');
+  document.getElementById('modal-root').innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>¿A qué mesa van?</h3>
+    <div class="modal-sub">Toca la mesa de destino</div>
+    <div class="mesas-grid">${tiles}</div>
+    <button class="btn btn-outline btn-block" onclick="elegirMesaPasar(null)">Para llevar</button>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="renderModalPasarProductos()">Volver</button>
+    </div>
+  </div></div>`;
+}
+function elegirMesaPasar(n){
+  const otras = CAJA.ventas.filter(x=>x.estado==='pendiente' && x.id!==pasarProd.ventaId && (x.mesa||null)===(n||null));
+  if(!otras.length){ ejecutarPasarProductos(n, null); return; }
+  const nArg = n===null ? 'null' : n;
+  document.getElementById('modal-root').innerHTML = `<div class="overlay"><div class="modal-box ancho">
+    <h3>${etiquetaMesa(n)} ya tiene cuenta</h3>
+    <div class="modal-sub">¿Dónde quieres poner los productos?</div>
+    ${otras.map(o=>`
+      <button class="btn btn-oro btn-block" style="text-align:left;" onclick="ejecutarPasarProductos(${nArg},'${o.id}')">
+        Agregar a la cuenta de ${o.nota ? escaparTexto(o.nota) : etiquetaMesa(n)}<br>
+        <span style="font-weight:400; font-size:.76rem;">${resumenItems(o.items)} · ${fmt(o.total)}</span>
+      </button>`).join('')}
+    <button class="btn btn-outline btn-block" onclick="ejecutarPasarProductos(${nArg},null)">Crear una cuenta nueva en ${etiquetaMesa(n)}</button>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-outline" onclick="renderModalDestinoPasar()">Volver</button>
+    </div>
+  </div></div>`;
+}
+async function ejecutarPasarProductos(mesa, destinoId){
+  const o = CAJA.ventas.find(x=>x.id===pasarProd.ventaId);
+  if(!o) return;
+  const d = destinoId ? CAJA.ventas.find(x=>x.id===destinoId) : null;
+  if(d && (d.descuento || d.servicioMonto>0)){
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast('Esa cuenta tiene descuento o propina. Quítalos primero o crea una cuenta nueva');
+    return;
+  }
+  const sel = Object.assign({}, pasarProd.sel);
+  modalProcesando();
+  try{
+    const filas = await itemsDeVenta(o.id);
+    /* 1) plan: de qué filas de la base se toma cuánto */
+    const plan = [];
+    for(const key of Object.keys(sel)){
+      let faltan = sel[key];
+      for(const f of filas){
+        if(faltan<=0) break;
+        if((f.producto_id + '|' + Number(f.precio)) !== key) continue;
+        const tomar = Math.min(Number(f.cantidad), faltan);
+        plan.push({ f, tomar });
+        faltan -= tomar;
+      }
+      if(faltan>0){ const err = new Error('stale'); err.stale = true; throw err; }
+    }
+    const monto = plan.reduce((a,p)=>a + p.tomar*Number(p.f.precio), 0);
+    const unidades = plan.reduce((a,p)=>a + p.tomar, 0);
+    const unidadesOrigen = filas.reduce((a,f)=>a + Number(f.cantidad), 0);
+    const vaciaOrigen = unidades === unidadesOrigen;
+
+    /* 2) cuenta destino: existente o nueva */
+    let destId = d ? d.id : null;
+    let nuevaVenta = null;
+    if(!d){
+      nuevaVenta = { id:uid('v'), ts:Date.now(), fecha:fechaOperativa(), hora:ahoraStr(), items:[], subtotal:monto, total:monto,
+        descuento:null, servicioPorcentaje:null, servicioMonto:0, metodo:null, recibido:null, cambio:null,
+        nota:'', cerrada:false, cajero:nombreUsuarioActual(), mesa:mesa, estado:'pendiente' };
+      idsPendientesConocidos.add(nuevaVenta.id);
+      idsComandasEncoladas.add(nuevaVenta.id);
+      await oInsert('ventas', filaVentaOracle(nuevaVenta));
+      destId = nuevaVenta.id;
+    }
+
+    /* 3) mover las filas de productos */
+    for(const p of plan){
+      const f = p.f;
+      const tsAg = f.ts_agregado!=null ? f.ts_agregado : null;
+      if(p.tomar === Number(f.cantidad)){
+        await oUpdate('venta_items', f.id, { id:f.id, venta_id:destId, producto_id:f.producto_id, nombre:f.nombre, precio:f.precio, cantidad:f.cantidad, ts_agregado:tsAg });
+      }else{
+        await oUpdate('venta_items', f.id, { id:f.id, venta_id:o.id, producto_id:f.producto_id, nombre:f.nombre, precio:f.precio, cantidad:Number(f.cantidad)-p.tomar, ts_agregado:tsAg });
+        await oInsert('venta_items', { id:uid('vi'), venta_id:destId, producto_id:f.producto_id, nombre:f.nombre, precio:f.precio, cantidad:p.tomar, ts_agregado:tsAg });
+      }
+    }
+
+    /* 4) totales del destino (si ya existía) y del origen */
+    if(d){
+      await oUpdate('ventas', d.id, filaVentaOracle(d, { subtotal:d.subtotal+monto, total:d.subtotal+monto, servicio_monto:0 }));
+    }
+    if(vaciaOrigen){
+      await oDelete('ventas', o.id);
+    }else{
+      await oUpdate('ventas', o.id, filaVentaOracle(o, { subtotal:o.subtotal-monto, total:o.subtotal-monto }));
+    }
+
+    /* 5) releer desde Oracle para que la pantalla quede exacta */
+    const [vr, ir] = await Promise.all([oListAll('ventas'), oListAll('venta_items')]);
+    CAJA.ventas = mapearVentas(vr, ir);
+    pasarProd = null;
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast(unidades + (unidades===1?' producto pasado':' productos pasados') + ' a ' + etiquetaMesa(mesa));
+    renderCaja(); renderResumen(); renderEstadisticas();
+  }catch(e){
+    console.error(e);
+    document.getElementById('modal-root').innerHTML = '';
+    mostrarToast(e.stale ? 'La cuenta cambió mientras la editabas. Intenta de nuevo' : 'No se pudo pasar los productos. Pulsa 🔄 para revisar cómo quedaron');
+  }
+}
+
 function abrirModalDetallePendiente(id){
   const v = CAJA.ventas.find(x=>x.id===id);
   if(!v) return;
