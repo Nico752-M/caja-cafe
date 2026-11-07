@@ -1288,7 +1288,7 @@ function ahoraStr(){ return new Date().toLocaleTimeString('es-CO', {hour:'2-digi
 const ORACLE_BASE = 'https://g473fddcae420b1-cafereal.adb.sa-bogota-1.oraclecloudapps.com/ords/dev_usuario/';
 
 async function oFetch(path, options={}){
-  const opts = { ...options, cache:'no-store', headers:{ 'Accept':'application/json', 'Cache-Control':'no-cache', ...(options.headers||{}) } };
+  const opts = { ...options, cache:'no-store', headers:{ 'Accept':'application/json', ...(options.headers||{}) } };
   if(opts.body && typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
   if(opts.body) opts.headers['Content-Type'] = 'application/json';
   let r;
@@ -3038,7 +3038,7 @@ async function confirmarAgregarAPendiente(){
       total:nuevoTotal, metodo:null, metodo2:null, monto2:null, recibido:null, cambio:null, nota:v.nota, cajero:v.cajero, cerrada:0, mesa:v.mesa, estado:'pendiente', servicio_porcentaje:v.servicioPorcentaje!=null?v.servicioPorcentaje:null, servicio_monto:t.montoServ, descuento_monto: descNuevo?descNuevo.monto:0,
       fecha_pago: v.fechaPago ? aOracleFecha(v.fechaPago) : null, hora_pago: v.horaPago||null, ts_pago: v.tsPago||null
     });
-    await descontarInventarioEnOracle(nuevosItems);
+    await descontarSeguro(nuevosItems);
     v.items = v.items.concat(nuevosItems);
     v.subtotal = nuevoSubtotal; v.total = nuevoTotal; v.descuento = descNuevo; v.servicioMonto = t.montoServ;
     mostrarToast('Productos agregados a la cuenta' + (v.mesa ? ' · Mesa '+v.mesa : ''));
@@ -3085,7 +3085,7 @@ async function dejarPendiente(){
     for(const it of items){
       await oInsert('venta_items', { id:uid('vi'), venta_id:venta.id, producto_id:it.productoId, nombre:it.nombre, precio:it.precio, cantidad:it.cantidad, ts_agregado: it.tsAgregado });
     }
-    await descontarInventarioEnOracle(items);
+    await descontarSeguro(items);
     CAJA.ventas.push(venta);
     imprimirComandaCocina(venta);
     mostrarToast('Pedido dejado pendiente' + (venta.mesa ? ' · Mesa '+venta.mesa : ''));
@@ -3139,7 +3139,7 @@ async function cobrar(){
       fecha_pago:aOracleFecha(venta.fechaPago),hora_pago:venta.horaPago,ts_pago:venta.tsPago
     });
     for(const it of items) await oInsert('venta_items',{id:uid('vi'),venta_id:venta.id,producto_id:it.productoId,nombre:it.nombre,precio:it.precio,cantidad:it.cantidad,ts_agregado:it.tsAgregado});
-    await descontarInventarioEnOracle(items);
+    await descontarSeguro(items);
     CAJA.ventas.push(venta);
     mostrarToast('Venta registrada · '+fmt(total));
     const box=document.getElementById('post-venta-box');
@@ -3147,23 +3147,47 @@ async function cobrar(){
     vaciarPedido(); renderCaja(); renderResumen(); renderEstadisticas();
   }catch(e){ console.error(e); mostrarToast('No se pudo guardar la venta en Oracle. Nada se cobró, intenta de nuevo.'); document.getElementById('btn-cobrar').disabled=false; }
 }
+
+async function descontarSeguro(items){
+  try{ await descontarInventarioEnOracle(items); }
+  catch(e){
+    console.error('Venta guardada, pero falló el descuento de inventario:', e);
+    setTimeout(()=>mostrarToast('Venta guardada, pero NO se pudo descontar el inventario'), 2600);
+  }
+}
 /* descuenta insumos leyendo el stock más reciente de Oracle justo antes de restar,
    para minimizar el riesgo de choque si dos cajas venden al mismo tiempo */
+async function recetaFresca(productoId){
+  try{
+    const q = encodeURIComponent(JSON.stringify({ producto_id: productoId }));
+    const d = await oFetch(`receta_items/?q=${q}&limit=500`);
+    const unicos = new Map();
+    ((d && d.items) || []).forEach(x=>{ if(!unicos.has(x.insumo_id)) unicos.set(x.insumo_id, { insumoId:x.insumo_id, cantidad:Number(x.cantidad) }); });
+    return [...unicos.values()];
+  }catch(e){
+    console.warn('No se pudo leer la receta fresca, uso la local:', e);
+    const p = PRODUCTOS.lista.find(x=>x.id===productoId);
+    return p && p.receta ? p.receta : [];
+  }
+}
+
 async function descontarInventarioEnOracle(itemsVenta){
   const necesita = {}; // insumoId -> cantidad total a restar
-  itemsVenta.forEach(it=>{
-    const prod = PRODUCTOS.lista.find(p=>p.id===it.productoId);
-    if(!prod || !prod.receta || !prod.receta.length) return;
-    prod.receta.forEach(r=>{ necesita[r.insumoId] = (necesita[r.insumoId]||0) + r.cantidad*it.cantidad; });
-  });
+  for(const it of itemsVenta){
+    const receta = await recetaFresca(it.productoId);
+    receta.forEach(r=>{ necesita[r.insumoId] = (necesita[r.insumoId]||0) + r.cantidad*it.cantidad; });
+  }
+  const noEncontrados = [];
   for(const insumoId of Object.keys(necesita)){
-    const fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`);
-    if(!fresco) continue;
+    let fresco = null;
+    try{ fresco = await oFetch(`insumos/${encodeURIComponent(insumoId)}`); }catch(_){ fresco = null; }
+    if(!fresco){ noEncontrados.push(insumoId); continue; }
     const nuevoStock = Number(fresco.stock) - necesita[insumoId]; /* puede quedar negativo (oculto en pantalla) */
     await oUpdate('insumos', insumoId, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
     const local = INVENTARIO.lista.find(i=>i.id===insumoId);
     if(local) local.stock = nuevoStock;
   }
+  if(noEncontrados.length) setTimeout(()=>mostrarToast('Aviso: ' + noEncontrados.length + ' insumo(s) de la receta no existen y no se descontaron'), 2600);
 }
 
 /* historial de ventas por fecha */
@@ -4691,9 +4715,10 @@ function borrarUsuario(id){
    REFRESCO_MS relee ventas y estado de caja, para que un pedido que un
    mesero deja desde el celular aparezca solo en el PC de la caja.
    ========================================================= */
-const REFRESCO_MS = 4000;
+const REFRESCO_MS = 10000;
 let refrescoTimer = null;
 let refrescando = false;
+let cicloRefresco = 0;
 let idsPendientesConocidos = new Set();
 let IDS_PEDIDOS_NUEVOS = new Set();
 let NOTIF_PENDIENTES = new Set(); /* ids de comandas que llegaron y el admin aún no revisó */
@@ -4716,9 +4741,19 @@ async function refrescoAutomatico(){
   if(modal && modal.innerHTML.trim() !== '') return;
   refrescando = true;
   try{
-    const [ventasRows, ventaItemsRows, estadoRows] = await Promise.all([
-      oListAll('ventas'), oListAll('venta_items'), oListAll('caja_estado')
+    cicloRefresco++;
+    const [ventasRows, ventaItemsRows, estadoRows, insumosRows] = await Promise.all([
+      oListAll('ventas'), oListAll('venta_items'), oListAll('caja_estado'), oListAll('insumos')
     ]);
+    INVENTARIO = { lista: insumosRows.map(r=>({ id:r.id, nombre:r.nombre, unidad:r.unidad, stock:Number(r.stock), minimo:Number(r.minimo) })) };
+    if(cicloRefresco % 6 === 0){ /* productos y recetas: cada ~60 s */
+      const [productosRows, recetaRows] = await Promise.all([ oListAll('productos'), oListAll('receta_items') ]);
+      PRODUCTOS = { lista: productosRows.map(r=>({
+        id:r.id, nombre:r.nombre, cat:r.categoria, precio:Number(r.precio), activo: !!Number(r.activo),
+        grupo: r.grupo || null, imagenUrl: r.imagen_url || null,
+        receta: recetaRows.filter(x=>x.producto_id===r.id).map(x=>({ _rowId:x.id, insumoId:x.insumo_id, cantidad:Number(x.cantidad) }))
+      })) };
+    }
     const estadoRow = estadoRows[0];
     const cajaEstabaAbierta = CAJA.estado.abierta;
     if(estadoRow){
@@ -4739,7 +4774,12 @@ async function refrescoAutomatico(){
 
     if(CAJA.estado.abierta !== cajaEstabaAbierta){ renderCaja(); }
     else { renderPedidosPendientes(); renderMesasGrid(); renderHistorialVentas(); renderCierrePreview(); }
-    renderResumen();
+    actualizarBadgeInventario();
+    const ae = document.activeElement;
+    const editandoInv = ae && ae.closest && ae.closest('#view-inventario');
+    if(document.getElementById('view-inventario').classList.contains('active') && !editandoInv) renderInventario();
+      
+  renderResumen();
 
     if(nuevos.length){
       /* Si el pedido llegó desde otro dispositivo, la caja lo imprime aquí.
