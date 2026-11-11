@@ -1010,6 +1010,25 @@ html,body{overflow-x:hidden; width:100%;}
         <div id="es-metodos"></div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h3>Reporte de caja</h3>
+      <p style="font-size:.8rem; color:var(--concreto); margin-bottom:12px;">Descarga el resumen de cada día (caja inicial, ventas, gastos y caja final), el detalle de gastos y los productos más vendidos.</p>
+      <div class="rango-btns" id="rep-modos" style="flex-wrap:wrap; margin-bottom:14px;">
+        <button class="active" data-m="hoy" onclick="setModoReporte('hoy')">Hoy</button>
+        <button data-m="dia" onclick="setModoReporte('dia')">Un día</button>
+        <button data-m="rango" onclick="setModoReporte('rango')">Varios días</button>
+        <button data-m="mes" onclick="setModoReporte('mes')">Todo el mes</button>
+        <button data-m="todo" onclick="setModoReporte('todo')">Todo el historial</button>
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="campo" id="rep-c-desde" style="display:none; margin:0; min-width:160px;"><label id="rep-l-desde">Día</label><input type="date" id="rep-desde"></div>
+        <div class="campo" id="rep-c-hasta" style="display:none; margin:0; min-width:160px;"><label>Hasta</label><input type="date" id="rep-hasta"></div>
+        <div class="campo" id="rep-c-mes" style="display:none; margin:0; min-width:160px;"><label>Mes</label><input type="month" id="rep-mes"></div>
+        <button class="btn btn-oro" onclick="lanzarReporteCaja('xlsx')">Descargar Excel</button>
+        <button class="btn btn-outline" onclick="lanzarReporteCaja('pdf')">Descargar PDF</button>
+      </div>
+    </div>
   </section>
 
 </main>
@@ -4295,6 +4314,9 @@ function ventasEnRango(){
   return pagadas;
 }
 function renderEstadisticas(){
+  { const hd = hoyISO();
+    ['rep-desde','rep-hasta'].forEach(id=>{ const e=document.getElementById(id); if(e && !e.value) e.value = hd; });
+    const em = document.getElementById('rep-mes'); if(em && !em.value) em.value = hd.slice(0,7); }
   const ventas = ventasEnRango();
   const total = ventas.reduce((a,v)=>a+v.total,0);
   document.getElementById('es-total').textContent = fmt(total);
@@ -4363,6 +4385,162 @@ function abrirModalRespaldo(){
     <button class="btn btn-outline btn-block" onclick="document.getElementById('modal-root').innerHTML=''" style="margin-top:6px;">Cerrar</button>
   </div></div>`;
 }
+/* =========================================================
+   REPORTE DE CAJA (Excel / PDF) — por día, rango o mes
+   Se arma con lo que ya existe en Oracle: CIERRES (caja inicial, ventas,
+   caja final), MOVIMIENTOS_CAJA (gastos) y VENTAS (productos). Sirve para
+   fechas anteriores a esta actualización porque esos datos ya tienen fecha.
+   ========================================================= */
+const LIBS_REPORTE = {
+  xlsx:  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  atbl:  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'
+};
+function cargarLib(url){
+  return new Promise((ok, err)=>{
+    const s = document.createElement('script');
+    s.src = url; s.onload = ok;
+    s.onerror = ()=>err(new Error('No se pudo cargar la librería (¿sin internet?)'));
+    document.head.appendChild(s);
+  });
+}
+function isoDeFecha(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+function datosReporteCaja(desde, hasta){
+  const metodos = Object.keys(METODOS);
+  const dias = {};
+  const dia = f => dias[f] || (dias[f] = { cierres:[], ventas:[], gastos:[], abierta:false });
+  CAJA.cierres.forEach(c=>dia(c.fechaApertura||c.fecha).cierres.push(c));
+  CAJA.ventas.filter(v=>v.estado==='pagada').forEach(v=>dia(v.fechaPago||v.fecha).ventas.push(v));
+  CAJA.movimientos.filter(m=>m.tipo==='egreso').forEach(m=>dia(m.fecha).gastos.push(m));
+  if(CAJA.estado.abierta && CAJA.estado.fechaApertura) dia(CAJA.estado.fechaApertura).abierta = true;
+
+  const filas = [];
+  for(let d=new Date(desde+'T00:00:00'); isoDeFecha(d)<=hasta; d.setDate(d.getDate()+1)){
+    const f = isoDeFecha(d), x = dias[f];
+    if(!x || (!x.cierres.length && !x.abierta)){ filas.push({ fecha:f, vacio:true }); continue; }
+    const cs = [...x.cierres].sort((a,b)=>a.id.localeCompare(b.id));
+    const porMetodo = {}; metodos.forEach(m=>porMetodo[m]=0);
+    let apertura = 0, ventas = 0, ing = 0, egr = 0, esperado = null, contado = null, cajero = '';
+    if(cs.length){
+      apertura = cs[0].apertura; cajero = cs[cs.length-1].cajero || '';
+      cs.forEach(c=>{ metodos.forEach(m=>porMetodo[m]+=c.porMetodo[m]||0); ventas+=c.totalVentas; ing+=c.totalIngresos; egr+=c.totalEgresos; });
+      esperado = cs[cs.length-1].esperado; contado = cs[cs.length-1].contado;
+    }
+    if(x.abierta){            /* jornada en curso: se suma lo que aún no se ha cerrado */
+      if(!cs.length){ apertura = CAJA.estado.apertura; cajero = CAJA.estado.cajero || ''; }
+      CAJA.ventas.filter(v=>!v.cerrada && v.estado==='pagada').forEach(v=>{
+        Object.entries(desglosePago(v)).forEach(([m,monto])=>{ porMetodo[m]=(porMetodo[m]||0)+monto; });
+        ventas += v.total;
+      });
+      ing += totalIngresosHoy(); egr += totalEgresosHoy();
+      esperado = null; contado = null;
+    }
+    filas.push({ fecha:f, estado: x.abierta?'Abierta':'Cerrada', cajero, apertura, porMetodo, ventas, nVentas:x.ventas.length,
+      ing, egr, esperado, contado, diferencia: (contado!=null && esperado!=null) ? contado-esperado : null });
+  }
+  const reales = filas.filter(f=>!f.vacio);
+  const tot = { ventas:0, nVentas:0, ing:0, egr:0, porMetodo:{} };
+  metodos.forEach(m=>tot.porMetodo[m]=0);
+  reales.forEach(f=>{ tot.ventas+=f.ventas; tot.nVentas+=f.nVentas; tot.ing+=f.ing; tot.egr+=f.egr; metodos.forEach(m=>tot.porMetodo[m]+=f.porMetodo[m]||0); });
+
+  const gastos = CAJA.movimientos.filter(m=>m.tipo==='egreso' && m.fecha>=desde && m.fecha<=hasta)
+    .sort((a,b)=>a.ts-b.ts)
+    .map(m=>[m.fecha, new Date(m.ts).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}), m.motivo, m.monto, m.cajero||'']);
+  const prod = {};
+  CAJA.ventas.filter(v=>v.estado==='pagada' && (v.fechaPago||v.fecha)>=desde && (v.fechaPago||v.fecha)<=hasta)
+    .forEach(v=>v.items.forEach(it=>{ const p = prod[it.nombre] || (prod[it.nombre]={cant:0,total:0}); p.cant+=it.cantidad; p.total+=it.precio*it.cantidad; }));
+  const productos = Object.entries(prod).sort((a,b)=>b[1].cant-a[1].cant).map(([n,p])=>[n,p.cant,p.total]);
+  return { metodos, filas, tot, gastos, productos };
+}
+
+/* tabla principal en forma de matriz (la usan el Excel y el PDF) */
+function tablaResumenCaja(r, formato){
+  const f = formato || (n=>n);
+  const enc = ['Fecha','Estado','Cajero','Caja inicial', ...r.metodos.map(m=>'Ventas '+METODOS[m].label), 'Ventas totales','# ventas','Ingresos extra','Gastos','Efectivo esperado','Caja final (contado)','Diferencia'];
+  const cuerpo = r.filas.map(x=> x.vacio
+    ? [x.fecha,'Sin movimiento']
+    : [x.fecha, x.estado, x.cajero, f(x.apertura), ...r.metodos.map(m=>f(x.porMetodo[m]||0)), f(x.ventas), x.nVentas, f(x.ing), f(x.egr),
+       x.esperado!=null?f(x.esperado):'', x.contado!=null?f(x.contado):'', x.diferencia!=null?f(x.diferencia):'']);
+  const t = r.tot;
+  const total = ['TOTAL','','','', ...r.metodos.map(m=>f(t.porMetodo[m])), f(t.ventas), t.nVentas, f(t.ing), f(t.egr),'','',''];
+  return { enc, cuerpo, total };
+}
+
+async function exportarReporteCajaExcel(desde, hasta){
+  try{
+    if(!window.XLSX) await cargarLib(LIBS_REPORTE.xlsx);
+    const r = datosReporteCaja(desde, hasta), t = tablaResumenCaja(r);
+    const wb = XLSX.utils.book_new();
+    const iNum = t.enc.indexOf('# ventas');
+    const ws1 = XLSX.utils.aoa_to_sheet([t.enc, ...t.cuerpo, t.total]);
+    Object.keys(ws1).forEach(k=>{ if(k[0]!=='!' && ws1[k].t==='n' && XLSX.utils.decode_cell(k).c!==iNum) ws1[k].z = '"$"#,##0'; });
+    ws1['!cols'] = t.enc.map((h,i)=>({ wch: i<3 ? 13 : Math.max(14, h.length+2) }));
+    XLSX.utils.book_append_sheet(wb, ws1, 'Resumen diario');
+    const ws2 = XLSX.utils.aoa_to_sheet([['Fecha','Hora','Motivo','Monto','Registró'], ...r.gastos, ['TOTAL','','',r.gastos.reduce((a,g)=>a+g[3],0),'']]);
+    Object.keys(ws2).forEach(k=>{ if(k[0]!=='!' && ws2[k].t==='n') ws2[k].z = '"$"#,##0'; });
+    ws2['!cols'] = [{wch:12},{wch:8},{wch:45},{wch:14},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Gastos');
+    const ws3 = XLSX.utils.aoa_to_sheet([['Producto','Unidades','Total vendido'], ...r.productos]);
+    Object.keys(ws3).forEach(k=>{ if(k[0]!=='!' && ws3[k].t==='n' && XLSX.utils.decode_cell(k).c===2) ws3[k].z = '"$"#,##0'; });
+    ws3['!cols'] = [{wch:35},{wch:10},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Productos');
+    XLSX.writeFile(wb, `cafe-real-caja-${desde}_a_${hasta}.xlsx`);
+    mostrarToast('Excel generado ✓');
+  }catch(e){ console.error(e); mostrarToast(e.message || 'No se pudo generar el Excel'); }
+}
+
+async function exportarReporteCajaPDF(desde, hasta){
+  try{
+    if(!window.jspdf) await cargarLib(LIBS_REPORTE.jspdf);
+    if(!(window.jspdf && window.jspdf.jsPDF.API.autoTable)) await cargarLib(LIBS_REPORTE.atbl);
+    const r = datosReporteCaja(desde, hasta), t = tablaResumenCaja(r, fmt);
+    const doc = new window.jspdf.jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
+    doc.setFontSize(16); doc.text('Café Real - Reporte de caja', 40, 40);
+    doc.setFontSize(10); doc.text(`Periodo: ${desde} a ${hasta}`, 40, 56);
+    doc.autoTable({ startY:68, head:[t.enc], body:[...t.cuerpo, t.total], styles:{ fontSize:7, cellPadding:3 }, headStyles:{ fillColor:[60,45,30] },
+      didParseCell: d=>{ if(d.row.index===t.cuerpo.length && d.section==='body'){ d.cell.styles.fontStyle='bold'; } } });
+    if(r.gastos.length){
+      doc.autoTable({ startY: doc.lastAutoTable.finalY+20, head:[['Fecha','Hora','Gasto / motivo','Monto','Registró']],
+        body:[...r.gastos.map(g=>[g[0],g[1],g[2],fmt(g[3]),g[4]]), ['TOTAL','','',fmt(r.gastos.reduce((a,g)=>a+g[3],0)),'']],
+        styles:{ fontSize:8 }, headStyles:{ fillColor:[60,45,30] } });
+    }
+    if(r.productos.length){
+      doc.autoTable({ startY: doc.lastAutoTable.finalY+20, head:[['Producto','Unidades','Total vendido']],
+        body:r.productos.slice(0,15).map(p=>[p[0],p[1],fmt(p[2])]), styles:{ fontSize:8 }, headStyles:{ fillColor:[60,45,30] } });
+    }
+    doc.save(`cafe-real-caja-${desde}_a_${hasta}.pdf`);
+    mostrarToast('PDF generado ✓');
+  }catch(e){ console.error(e); mostrarToast(e.message || 'No se pudo generar el PDF'); }
+}
+
+let repModo = 'hoy';
+function setModoReporte(m){
+  repModo = m;
+  document.querySelectorAll('#rep-modos button').forEach(b=>b.classList.toggle('active', b.dataset.m===m));
+  const v = (id,on)=>{ document.getElementById(id).style.display = on ? '' : 'none'; };
+  v('rep-c-desde', m==='dia'||m==='rango'); v('rep-c-hasta', m==='rango'); v('rep-c-mes', m==='mes');
+  document.getElementById('rep-l-desde').textContent = m==='dia' ? 'Día' : 'Desde';
+}
+function rangoReporteSeleccionado(){
+  const hoy = hoyISO();
+  if(repModo==='hoy') return [hoy, hoy];
+  if(repModo==='dia'){ const d = document.getElementById('rep-desde').value; return [d, d]; }
+  if(repModo==='rango') return [document.getElementById('rep-desde').value, document.getElementById('rep-hasta').value];
+  if(repModo==='mes'){
+    const v = document.getElementById('rep-mes').value; if(!v) return ['',''];
+    const [y,m] = v.split('-').map(Number);
+    return [isoDeFecha(new Date(y,m-1,1)), isoDeFecha(new Date(y,m,0))];
+  }
+  const f = CAJA.cierres.map(c=>c.fechaApertura||c.fecha).concat(CAJA.ventas.map(v=>v.fecha)).filter(Boolean).sort()[0];
+  return [f || hoy, hoy];
+}
+function lanzarReporteCaja(tipo){
+  const [d,h] = rangoReporteSeleccionado();
+  if(!d || !h || d>h){ mostrarToast('Revisa las fechas elegidas'); return; }
+  if(tipo==='xlsx') exportarReporteCajaExcel(d,h); else exportarReporteCajaPDF(d,h);
+}
+
 function descargarArchivo(nombre, contenido, tipo){
   const blob = new Blob([contenido], {type: tipo});
   const url = URL.createObjectURL(blob);
