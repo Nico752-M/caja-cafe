@@ -3175,7 +3175,7 @@ async function descontarSeguro(items){
   }
 }
 /* descuenta insumos leyendo el stock más reciente de Oracle justo antes de restar,
-   para minimizar el riesgo de choque si dos cajas venden al mismo tiempo. */
+   para minimizar el riesgo de choque si dos cajas venden al mismo tiempo */
 async function recetaFresca(productoId){
   try{
     const q = encodeURIComponent(JSON.stringify({ producto_id: productoId }));
