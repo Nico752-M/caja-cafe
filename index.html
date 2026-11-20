@@ -3902,7 +3902,6 @@ function renderInventario(){
       <td><span class="stock-badge ${clase}">${Math.max(0, i.stock)}${agotado?' · agotado':''}</span></td>
       <td class="mono">${i.minimo}</td>
       <td><div style="display:flex; gap:6px;">
-        <button class="btn btn-outline btn-sm" onclick="ajustarStock('${i.id}',-1)">–</button>
         <input class="mini-input" type="number" id="ajuste-${i.id}" step="any" placeholder="cant. (ej: 0.5)">
         <button class="btn btn-outline btn-sm" onclick="ajustarStockInput('${i.id}')">+</button>
       </div></td>
@@ -3928,20 +3927,11 @@ async function agregarInsumo(e){
   }catch(e){ console.error(e); mostrarToast('No se pudo agregar el insumo en Oracle'); }
   return false;
 }
-async function ajustarStock(id, delta){
-  try{
-    const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
-    const nuevoStock = Math.max(0, Math.max(0, Number(fresco.stock)) + delta); /* parte de lo visible: la deuda oculta se borra */
-    await oUpdate('insumos', id, { id:fresco.id, nombre:fresco.nombre, unidad:fresco.unidad, stock:nuevoStock, minimo:fresco.minimo });
-    const i = INVENTARIO.lista.find(x=>x.id===id);
-    if(i) i.stock = nuevoStock;
-    renderInventario(); actualizarBadgeInventario(); renderCaja();
-  }catch(e){ console.error(e); mostrarToast('No se pudo ajustar el stock en Oracle'); }
-}
 async function ajustarStockInput(id){
   const input = document.getElementById('ajuste-'+id);
   const val = parseFloat(input.value);
   if(!val) return;
+  if(val < 0){ mostrarToast('Para restar stock usa "Baja" para que quede registrado'); return; }
   try{
     const fresco = await oFetch(`insumos/${encodeURIComponent(id)}`);
     const nuevoStock = Math.max(0, Math.max(0, Number(fresco.stock)) + val); /* parte de lo visible: la deuda oculta se borra */
